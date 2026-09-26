@@ -821,7 +821,7 @@ function renderAuth(){
     ${signed?`<div class="anote">${esc(t("signedAs"))} <b>${esc(authEmail)}</b> · <button type="button" class="linkbtn" id="aOutReg">${esc(t("logout"))}</button></div>`
       :`<button class="gbtn" id="gBtn" type="button">${ICO.google}${esc(t("google"))}</button><div class="or">${esc(t("or"))}</div>`}
     <form id="aForm" novalidate>
-      <label class="fld">${ICO.user}<input name="name" autocomplete="name" maxlength="60" placeholder="${esc(t("fullName"))}" value="${esc(draft.name||"")}"></label>
+      <label class="fld">${ICO.user}<input name="name" autocomplete="name" maxlength="60" placeholder="${esc(t("fullName"))}" value="${esc(draft.name||S.authName||"")}"></label>
       <label class="fld">${ICO.at}<input name="nick" autocomplete="nickname" maxlength="21" placeholder="${esc(t("nick").replace(/\s*\(.*\)/,""))}" value="${esc(draft.nick||"")}"><small>${esc(t("nickHint"))}</small></label>
       <label class="fld">${ICO.mail}<input name="email" type="email" autocomplete="email" maxlength="80" placeholder="${esc(t("email"))}" value="${esc(signed?authEmail:(draft.email||""))}" ${signed&&authEmail?"readonly":""}></label>
       <div class="fld">${ICO.phone}<span class="sep"></span>
@@ -898,7 +898,7 @@ const fbReady=new Promise(r=>{if(window.FB)r();else addEventListener("fb-ready",
   FB.onAuth(async u=>{
     if(S.registering)return;
     if(u&&u.uid===S.uid&&S.me?.nick)return;
-    S.uid=u?u.uid:null;S.authEmail=u?.email||"";S.contact=null;
+    S.uid=u?u.uid:null;S.authEmail=u?.email||"";S.authName=u?.displayName||"";S.contact=null;
     if(S.uid){try{const snap=await db.doc("scores/"+S.uid).get();S.me=normMe(snap.exists?snap.data():null)}catch(e){S.me=normMe(null)}
       try{const c=await db.doc("contacts/"+S.uid).get();if(c.exists)S.contact=c.data()}catch(e){}}
     else S.me=normMe(null);
