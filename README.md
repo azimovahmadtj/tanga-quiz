@@ -31,6 +31,11 @@ firebase deploy             # ҳам сайт, ҳам қоидаҳои пойг�
 - Сайт: `https://<PROJECT_ID>.web.app`
 - Панели админ: `https://<PROJECT_ID>.web.app/admin`
 
+### Хатои «Missing or insufficient permissions»
+Ин маънои онро дорад, ки қоидаҳои пойгоҳ нашр нашудаанд (дар ҳолати **production** Firestore ҳама чизро манъ мекунад, ҳолати **test** баъди 30 рӯз хомӯш мешавад). Ҳал:
+- `firebase deploy --only firestore:rules`, **ё**
+- **Firestore Database → Rules**: матни файли `firestore.rules`-ро пурра гузоред ва **Publish**-ро пахш кунед. Баъд аз 1–2 дақиқа саҳифаро нав кунед.
+
 ## 3. Худро админ кунед (як бор)
 1. **Authentication → Users → Add user**. Почтаи худ ва **рамзи махсус**-ро нависед. Ин рамзи воридшавӣ ба панел мешавад.
 2. **User UID**-и ин корбарро нусхабардорӣ кунед.
