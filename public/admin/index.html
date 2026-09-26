@@ -558,8 +558,15 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const S={db:null,user:null,uid:null,admin:false,loaded:false,error:false,contact:null,questions:[],me:null,board:[],prize:null,view:"home",game:null};
 
-function period(){return Math.floor((Date.now()-CFG.epoch)/(CFG.roundDays*864e5))}
-function daysLeft(){const end=CFG.epoch+(period()+1)*CFG.roundDays*864e5;return Math.max(1,Math.ceil((end-Date.now())/864e5))}
+// base = number of the round that starts at epoch (lets the admin change roundDays without renumbering rounds)
+function period(){return (CFG.base||0)+Math.floor((Date.now()-CFG.epoch)/(CFG.roundDays*864e5))}
+function roundStart(){return CFG.epoch+(period()-(CFG.base||0))*CFG.roundDays*864e5}
+function daysLeft(){const end=roundStart()+CFG.roundDays*864e5;return Math.max(1,Math.ceil((end-Date.now())/864e5))}
+// Game rules edited in the admin panel (config/rules); invalid or missing values keep the defaults above
+const RULE_LIMITS={seconds:[5,300],coinsPerRight:[1,1000],dailyLimit:[1,1000],roundDays:[1,365]};
+function applyRules(d){if(!d)return;
+  for(const k in RULE_LIMITS){const v=+d[k],[lo,hi]=RULE_LIMITS[k];if(Number.isInteger(v)&&v>=lo&&v<=hi)CFG[k]=v}
+  if(Number.isFinite(+d.epoch)&&d.epoch)CFG.epoch=+d.epoch;if(Number.isInteger(+d.base))CFG.base=+d.base}
 function dayKey(d=new Date()){const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return z.toISOString().slice(0,10)}
 const KEEP=["hist","quizDone","avatar","nick","nickLower","totalAnswered","totalCorrect","days","lastTopic","activity","wrong"];
 function freshMe(){return{period:period(),coins:0,answered:[],day:dayKey(),dayCount:0,dayCoins:0,totalAnswered:0,totalCorrect:0,days:[],activity:[],wrong:[]}}
@@ -1038,7 +1045,7 @@ async function paintPlayers(){const box=$("players");if(!box)return;
 
 /* ===================== ADMIN PANEL ===================== */
 const AT={
- tj:{alTitle:"Кабинети админ",alSub:"Барои идора кардани сайт почта ва рамзи махсуси худро ворид кунед.",alCode:"Рамзи махсус",alBtn:"Даромадан",notAdmin:"Ин ҳисоб ҳуқуқи админ надорад",asettings:"Танзимот",superadmin:"Суперадмин",heroSub2:"Платформаи муосири омӯзиши таърих, сазмон додан ва санҷиши дониш.",quickOps:"Амалиётҳои зуд",withQ:"бо савол",kActive:"Корбарони фаъол",tabActive:"Корбарони фаъол",tabSign:"Корбарони нав",tabAns:"Саволҳои ҳалшуда",signupsN:"корбари нав",answersN:"ҷавоб",authSvc:"Воридшавӣ",activeQz:"Викторинаҳои фаъол",coverage:"Пуррагии мавзӯъҳо",allTopicsL:"Ҳамаи мавзӯъҳо",allUsersL:"Ҳамаи корбарон",allNotifL:"Ҳамаи огоҳиномаҳо",draft:"Холӣ",rules:"Қоидаҳои бозӣ",secPerQ:"Сония барои ҳар савол",coinsPerQ:"Танга барои ҷавоби дуруст",dailyL:"Лимити рӯзонаи саволҳо",roundLen:"Давомнокии давра",rulesNote:"Барои иваз кардани ин қоидаҳо ба ман нависед — онҳо дар коди сайт муқаррар шудаанд.",quizzes:"Викторинаҳо",qaQuiz:"Гузоштани викторина",newQuiz:"Викторинаи нав",qzTitle:"Номи викторина",qzFrom:"Оғоз",qzTo:"Анҷом",qzBonus:"Танга барои ҷавоби дуруст",qzPick:"Саволҳоро интихоб кунед",qzSel:"интихоб шуд",qzSave:"Викторинаро гузоштан",qzCreated:"Викторина гузошта шуд",qzDeleted:"Викторина нест карда шуд",qzActive:"Фаъол",qzPlanned:"Дар навбат",qzEnded:"Анҷом ёфт",qzNone:"Ҳанӯз викторина нест",qzPlayers:"иштирокчӣ",evQuiz:"Викторинаи нав гузошта шуд",qzNeedQ:"Ақаллан як савол интихоб кунед",qzBadDates:"Санаи анҷом бояд баъд аз оғоз бошад",qzEndNow:"Ҳозир анҷом додан",qzEndedNow:"Викторина анҷом дода шуд",selAll:"Ҳамаро интихоб",panel:"Панели администратор",dash:"Бозӣ",topics:"Мавзӯъҳо",questions:"Саволҳо",users:"Истифодабарандагон",prizeNav:"Мукофот ва давра",stats:"Статистика",notif:"Огоҳиномаҳо",toSite:"Ба сайт",
+ tj:{alTitle:"Кабинети админ",alSub:"Барои идора кардани сайт почта ва рамзи махсуси худро ворид кунед.",alCode:"Рамзи махсус",alBtn:"Даромадан",notAdmin:"Ин ҳисоб ҳуқуқи админ надорад",asettings:"Танзимот",superadmin:"Суперадмин",heroSub2:"Платформаи муосири омӯзиши таърих, сазмон додан ва санҷиши дониш.",quickOps:"Амалиётҳои зуд",withQ:"бо савол",kActive:"Корбарони фаъол",tabActive:"Корбарони фаъол",tabSign:"Корбарони нав",tabAns:"Саволҳои ҳалшуда",signupsN:"корбари нав",answersN:"ҷавоб",authSvc:"Воридшавӣ",activeQz:"Викторинаҳои фаъол",coverage:"Пуррагии мавзӯъҳо",allTopicsL:"Ҳамаи мавзӯъҳо",allUsersL:"Ҳамаи корбарон",allNotifL:"Ҳамаи огоҳиномаҳо",draft:"Холӣ",rules:"Қоидаҳои бозӣ",secPerQ:"Сония барои ҳар савол",coinsPerQ:"Танга барои ҷавоби дуруст",dailyL:"Лимити рӯзонаи саволҳо",roundLen:"Давомнокии давра",rulesNote:"Тағйирот барои ҳама бозингарон фавран амал мекунад. Агар давомнокии давраро иваз кунед, даври ҷорӣ аз рӯзи оғози худ ҳисоб мешавад ва тангаҳои бозингарон нигоҳ дошта мешаванд.",rulesSave:"Нигоҳ доштан",rulesSaved:"Қоидаҳо нигоҳ дошта шуданд",rulesBad:"Қимати нодуруст",quizzes:"Викторинаҳо",qaQuiz:"Гузоштани викторина",newQuiz:"Викторинаи нав",qzTitle:"Номи викторина",qzFrom:"Оғоз",qzTo:"Анҷом",qzBonus:"Танга барои ҷавоби дуруст",qzPick:"Саволҳоро интихоб кунед",qzSel:"интихоб шуд",qzSave:"Викторинаро гузоштан",qzCreated:"Викторина гузошта шуд",qzDeleted:"Викторина нест карда шуд",qzActive:"Фаъол",qzPlanned:"Дар навбат",qzEnded:"Анҷом ёфт",qzNone:"Ҳанӯз викторина нест",qzPlayers:"иштирокчӣ",evQuiz:"Викторинаи нав гузошта шуд",qzNeedQ:"Ақаллан як савол интихоб кунед",qzBadDates:"Санаи анҷом бояд баъд аз оғоз бошад",qzEndNow:"Ҳозир анҷом додан",qzEndedNow:"Викторина анҷом дода шуд",selAll:"Ҳамаро интихоб",panel:"Панели администратор",dash:"Бозӣ",topics:"Мавзӯъҳо",questions:"Саволҳо",users:"Истифодабарандагон",prizeNav:"Мукофот ва давра",stats:"Статистика",notif:"Огоҳиномаҳо",toSite:"Ба сайт",
   asearch:"Ҷустуҷӯ (истифодабаранда, мавзӯъ, савол…)",heroSub:"Идоракунӣ, таҳлил ва рушди платформаи омӯзиши таърих.",quote:"«Донистани гузашта калиди оянда аст.»",
   kUsers:"Истифодабарандагон",kTopics:"Мавзӯъҳо",kQ:"Саволҳо",kAns:"Ҷавобҳо",in7:"дар 7 рӯз",activeToday:"фаъол имрӯз",custom:"фармоишӣ",
   activity:"Фаъолияти платформа",activeUsers:"истифодабарандаи фаъол",dN:"рӯз",quick:"Идомаҳои зуд",qaTopic:"Иловаи мавзӯи нав",qaQ:"Иловаи саволи нав",qaPrize:"Мукофот ва давра",qaUsers:"Идоракунии истифодабарандагон",
@@ -1050,7 +1057,7 @@ const AT={
   resetCoins:"Тангаҳоро сифр кардан",delUser:"Нест кардан",delUserQ:"Ин истифодабарандаро нест мекунед?",delUserT:"Профил, тангаҳо ва маълумоти тамоси ӯ пурра нест мешаванд.",userDel:"Истифодабаранда нест карда шуд",coinsReset:"Тангаҳо сифр карда шуданд",
   winners:"Ғолибони давраи ҷорӣ",roundInfo:"Давраи",ends:"охир мешавад пас аз",byTopicA:"Ҷавобҳо аз рӯи мавзӯъҳо (давраи ҷорӣ)",topPlayers:"Фаъолтарин бозингарон (ҳама вақт)",accAll:"Дурустии умумӣ",
   goQ:"Саволҳоро дидан",filterBy:"Мавзӯъ",ofUsers:"аз"},
- ru:{alTitle:"Кабинет администратора",alSub:"Чтобы управлять сайтом, введите почту и свой специальный код.",alCode:"Специальный код",alBtn:"Войти",notAdmin:"У этого аккаунта нет прав администратора",asettings:"Настройки",superadmin:"Суперадмин",heroSub2:"Современная платформа изучения истории, организации и проверки знаний.",quickOps:"Быстрые действия",withQ:"с вопросами",kActive:"Активные пользователи",tabActive:"Активные",tabSign:"Новые пользователи",tabAns:"Решённые вопросы",signupsN:"новых пользователей",answersN:"ответов",authSvc:"Вход",activeQz:"Активные викторины",coverage:"Заполненность тем",allTopicsL:"Все темы",allUsersL:"Все пользователи",allNotifL:"Все уведомления",draft:"Пусто",rules:"Правила игры",secPerQ:"Секунд на вопрос",coinsPerQ:"Танга за верный ответ",dailyL:"Дневной лимит вопросов",roundLen:"Длина раунда",rulesNote:"Чтобы изменить эти правила, напишите мне — они заданы в коде сайта.",quizzes:"Викторины",qaQuiz:"Создать викторину",newQuiz:"Новая викторина",qzTitle:"Название викторины",qzFrom:"Начало",qzTo:"Конец",qzBonus:"Танга за верный ответ",qzPick:"Выберите вопросы",qzSel:"выбрано",qzSave:"Создать викторину",qzCreated:"Викторина создана",qzDeleted:"Викторина удалена",qzActive:"Активна",qzPlanned:"Запланирована",qzEnded:"Завершена",qzNone:"Викторин пока нет",qzPlayers:"участн.",evQuiz:"Создана новая викторина",qzNeedQ:"Выберите хотя бы один вопрос",qzBadDates:"Конец должен быть позже начала",qzEndNow:"Завершить сейчас",qzEndedNow:"Викторина завершена",selAll:"Выбрать все",panel:"Панель администратора",dash:"Главная",topics:"Темы",questions:"Вопросы",users:"Пользователи",prizeNav:"Призы и раунд",stats:"Статистика",notif:"Уведомления",toSite:"На сайт",
+ ru:{alTitle:"Кабинет администратора",alSub:"Чтобы управлять сайтом, введите почту и свой специальный код.",alCode:"Специальный код",alBtn:"Войти",notAdmin:"У этого аккаунта нет прав администратора",asettings:"Настройки",superadmin:"Суперадмин",heroSub2:"Современная платформа изучения истории, организации и проверки знаний.",quickOps:"Быстрые действия",withQ:"с вопросами",kActive:"Активные пользователи",tabActive:"Активные",tabSign:"Новые пользователи",tabAns:"Решённые вопросы",signupsN:"новых пользователей",answersN:"ответов",authSvc:"Вход",activeQz:"Активные викторины",coverage:"Заполненность тем",allTopicsL:"Все темы",allUsersL:"Все пользователи",allNotifL:"Все уведомления",draft:"Пусто",rules:"Правила игры",secPerQ:"Секунд на вопрос",coinsPerQ:"Танга за верный ответ",dailyL:"Дневной лимит вопросов",roundLen:"Длина раунда",rulesNote:"Изменения сразу действуют для всех игроков. Если изменить длительность раунда, текущий раунд отсчитывается от своего начала, а танга игроков сохраняются.",rulesSave:"Сохранить",rulesSaved:"Правила сохранены",rulesBad:"Неверное значение",quizzes:"Викторины",qaQuiz:"Создать викторину",newQuiz:"Новая викторина",qzTitle:"Название викторины",qzFrom:"Начало",qzTo:"Конец",qzBonus:"Танга за верный ответ",qzPick:"Выберите вопросы",qzSel:"выбрано",qzSave:"Создать викторину",qzCreated:"Викторина создана",qzDeleted:"Викторина удалена",qzActive:"Активна",qzPlanned:"Запланирована",qzEnded:"Завершена",qzNone:"Викторин пока нет",qzPlayers:"участн.",evQuiz:"Создана новая викторина",qzNeedQ:"Выберите хотя бы один вопрос",qzBadDates:"Конец должен быть позже начала",qzEndNow:"Завершить сейчас",qzEndedNow:"Викторина завершена",selAll:"Выбрать все",panel:"Панель администратора",dash:"Главная",topics:"Темы",questions:"Вопросы",users:"Пользователи",prizeNav:"Призы и раунд",stats:"Статистика",notif:"Уведомления",toSite:"На сайт",
   asearch:"Поиск (пользователь, тема, вопрос…)",heroSub:"Управление, аналитика и развитие платформы изучения истории.",quote:"«Знание прошлого — ключ к будущему.»",
   kUsers:"Пользователи",kTopics:"Темы",kQ:"Вопросы",kAns:"Ответы",in7:"за 7 дней",activeToday:"активны сегодня",custom:"своих",
   activity:"Активность платформы",activeUsers:"активных пользователей",dN:"дней",quick:"Быстрые действия",qaTopic:"Добавить тему",qaQ:"Добавить вопрос",qaPrize:"Призы и раунд",qaUsers:"Управление пользователями",
@@ -1062,7 +1069,7 @@ const AT={
   resetCoins:"Обнулить танга",delUser:"Удалить",delUserQ:"Удалить этого пользователя?",delUserT:"Его профиль, танга и контакты будут удалены полностью.",userDel:"Пользователь удалён",coinsReset:"Танга обнулены",
   winners:"Лидеры текущего раунда",roundInfo:"Раунд",ends:"закончится через",byTopicA:"Ответы по темам (текущий раунд)",topPlayers:"Самые активные (за всё время)",accAll:"Общая точность",
   goQ:"Открыть вопросы",filterBy:"Тема",ofUsers:"из"},
- en:{alTitle:"Admin area",alSub:"Enter your email and special code to manage the site.",alCode:"Special code",alBtn:"Sign in",notAdmin:"This account has no admin rights",asettings:"Settings",superadmin:"Super admin",heroSub2:"A modern platform for learning history, organising and testing knowledge.",quickOps:"Quick actions",withQ:"with questions",kActive:"Active users",tabActive:"Active users",tabSign:"New users",tabAns:"Answered questions",signupsN:"new users",answersN:"answers",authSvc:"Sign-in",activeQz:"Active quizzes",coverage:"Topic coverage",allTopicsL:"All topics",allUsersL:"All users",allNotifL:"All notifications",draft:"Empty",rules:"Game rules",secPerQ:"Seconds per question",coinsPerQ:"Coins per correct answer",dailyL:"Daily question limit",roundLen:"Round length",rulesNote:"To change these rules, ask me — they are set in the site code.",quizzes:"Quizzes",qaQuiz:"Create a quiz",newQuiz:"New quiz",qzTitle:"Quiz title",qzFrom:"Starts",qzTo:"Ends",qzBonus:"Coins per correct answer",qzPick:"Choose questions",qzSel:"selected",qzSave:"Create quiz",qzCreated:"Quiz created",qzDeleted:"Quiz deleted",qzActive:"Active",qzPlanned:"Scheduled",qzEnded:"Ended",qzNone:"No quizzes yet",qzPlayers:"players",evQuiz:"New quiz created",qzNeedQ:"Pick at least one question",qzBadDates:"End must be after start",qzEndNow:"End now",qzEndedNow:"Quiz ended",selAll:"Select all",panel:"Admin panel",dash:"Dashboard",topics:"Topics",questions:"Questions",users:"Users",prizeNav:"Prizes & round",stats:"Statistics",notif:"Notifications",toSite:"To site",
+ en:{alTitle:"Admin area",alSub:"Enter your email and special code to manage the site.",alCode:"Special code",alBtn:"Sign in",notAdmin:"This account has no admin rights",asettings:"Settings",superadmin:"Super admin",heroSub2:"A modern platform for learning history, organising and testing knowledge.",quickOps:"Quick actions",withQ:"with questions",kActive:"Active users",tabActive:"Active users",tabSign:"New users",tabAns:"Answered questions",signupsN:"new users",answersN:"answers",authSvc:"Sign-in",activeQz:"Active quizzes",coverage:"Topic coverage",allTopicsL:"All topics",allUsersL:"All users",allNotifL:"All notifications",draft:"Empty",rules:"Game rules",secPerQ:"Seconds per question",coinsPerQ:"Coins per correct answer",dailyL:"Daily question limit",roundLen:"Round length",rulesNote:"Changes apply to every player right away. If you change the round length, the current round is counted from its start and players keep their coins.",rulesSave:"Save",rulesSaved:"Rules saved",rulesBad:"Invalid value",quizzes:"Quizzes",qaQuiz:"Create a quiz",newQuiz:"New quiz",qzTitle:"Quiz title",qzFrom:"Starts",qzTo:"Ends",qzBonus:"Coins per correct answer",qzPick:"Choose questions",qzSel:"selected",qzSave:"Create quiz",qzCreated:"Quiz created",qzDeleted:"Quiz deleted",qzActive:"Active",qzPlanned:"Scheduled",qzEnded:"Ended",qzNone:"No quizzes yet",qzPlayers:"players",evQuiz:"New quiz created",qzNeedQ:"Pick at least one question",qzBadDates:"End must be after start",qzEndNow:"End now",qzEndedNow:"Quiz ended",selAll:"Select all",panel:"Admin panel",dash:"Dashboard",topics:"Topics",questions:"Questions",users:"Users",prizeNav:"Prizes & round",stats:"Statistics",notif:"Notifications",toSite:"To site",
   asearch:"Search (user, topic, question…)",heroSub:"Manage, analyse and grow the history learning platform.",quote:"“Knowing the past is the key to the future.”",
   kUsers:"Users",kTopics:"Topics",kQ:"Questions",kAns:"Answers",in7:"in 7 days",activeToday:"active today",custom:"custom",
   activity:"Platform activity",activeUsers:"active users",dN:"days",quick:"Quick actions",qaTopic:"Add a topic",qaQ:"Add a question",qaPrize:"Prizes & round",qaUsers:"Manage users",
@@ -1100,13 +1107,16 @@ function daysBack(n){const out=[];const d=new Date();d.setHours(12,0,0,0);d.setD
 function activeSeries(n){const ds=daysBack(n).map(dayKey);return ds.map(k=>aUsers().filter(u=>(u.days||[]).includes(k)).length)}
 function cumSeries(times,n){const ds=daysBack(n);return ds.map(d=>{const end=new Date(d);end.setHours(23,59,59,999);return times.filter(x=>x&&x<=end.getTime()).length})}
 function since(times,ms){const c=Date.now()-ms;return times.filter(x=>x>c).length}
+function notifSeen(){try{const v=+localStorage.getItem("tanga_notif_seen");if(v)return v}catch(e){}return Date.now()-864e5}
+function markNotifSeen(){try{localStorage.setItem("tanga_notif_seen",String(Date.now()))}catch(e){}}
+function unseenCount(){const s=notifSeen();return events().filter(e=>e.t>s).length}
 function events(){
   const ev=[];
   aUsers().forEach(u=>{const c=contactOf(u.id);if(c.createdAt)ev.push({t:c.createdAt,k:"evUser",d:u.nick,ic:"👤",bg:"var(--red-soft)"})});
   S.questions.forEach(q=>{if(q.createdAt)ev.push({t:q.createdAt,k:"evQ",d:topicName(q.topic),ic:"❓",bg:"var(--blue-soft)"})});
   (S.quizzes||[]).forEach(z=>{if(z.createdAt)ev.push({t:z.createdAt,k:"evQuiz",d:qLang(z.title),ic:"🏆",bg:"#FDEBC8"})});
   (S.customTopics||[]).forEach(x=>{if(x.createdAt)ev.push({t:x.createdAt,k:"evTopic",d:topicName(x.id),ic:"📚",bg:"var(--green-soft)"})});
-  const rs=CFG.epoch+period()*CFG.roundDays*864e5;if(rs<=Date.now())ev.push({t:rs,k:"evRound",d:`#${Math.max(1,period()+1)}`,ic:"🏁",bg:"var(--violet-soft)"});
+  const rs=roundStart();if(rs<=Date.now())ev.push({t:rs,k:"evRound",d:`#${Math.max(1,period()+1)}`,ic:"🏁",bg:"var(--violet-soft)"});
   return ev.sort((a,b)=>b.t-a.t)}
 function spark(vals,color){const w=110,h=38,mx=Math.max(1,...vals),mn=Math.min(...vals),r=Math.max(1,mx-mn);
   const pts=vals.map((v,i)=>[i*(w/(vals.length-1||1)),h-4-((v-mn)/r)*(h-10)]);
@@ -1146,14 +1156,14 @@ function admSoft(){if($("adm").hidden)return;
   paintAdmLists()}
 function aSide(){
   const items=["dash","topics","questions","quizzes","users","stats","prizeNav","notif","asettings"];
-  const recent=events().filter(e=>Date.now()-e.t<864e5).length;
+  const recent=A.view==="notif"?0:unseenCount();
   return `<aside class="anav" style="--sideimg:url('${IMG.bside}')">
    <div class="abrand"><svg width="50" height="50" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 2 7v2h20V7L12 2ZM4 10h3v8H4v-8Zm6.5 0h3v8h-3v-8ZM17 10h3v8h-3v-8ZM2 19h20v3H2v-3Z"/></svg><div><b>${esc(t("history"))}</b><span>${esc(at("panel"))}</span></div></div>
    <nav class="alist">${items.map(k=>`<button data-av="${k}" ${A.view===k?'aria-current="page"':""}>${aico(k)}<span>${esc(at(k))}</span>${k==="notif"&&recent?`<span class="cnt">${recent}</span>`:""}</button>`).join("")}</nav>
    <div class="ame"><span class="ava">${avaInner()}</span><div><b>${esc(S.me?.nick||"Admin")}</b><span>${esc(at("superadmin"))}</span></div>
      <button id="aOut" aria-label="${esc(at("toSite"))}" title="${esc(at("toSite"))}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5M10 16l4-4-4-4M14 12H3"/></svg></button></div></aside>`}
 function isDark(){return document.documentElement.getAttribute("data-theme")==="dark"||(theme==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches)}
-function aTop(){const recent=events().filter(e=>Date.now()-e.t<864e5).length;
+function aTop(){const recent=A.view==="notif"?0:unseenCount();
   return `<div class="atopbar"><div class="search" style="max-width:480px"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
    <input id="aq" type="search" autocomplete="off" placeholder="${esc(at("asearch"))}"><div class="sres" id="asres" hidden></div></div><div class="spacer"></div>
    <div class="langs" role="group" aria-label="Language">${LANGS.map(l=>`<button data-alang="${l}" aria-pressed="${l===lang}">${l.toUpperCase()}</button>`).join("")}</div>
@@ -1163,6 +1173,7 @@ function aTop(){const recent=events().filter(e=>Date.now()-e.t<864e5).length;
 
 function renderAdm(keepScroll){
   const y=window.scrollY;
+  if(A.view==="notif")markNotifSeen();
   const body={asettings:aSettings,quizzes:aQuizzes,dash:aDash,topics:aTopics,questions:aQuestions,users:aUsersPage,prizeNav:aPrize,stats:aStats,notif:aNotif}[A.view]||aDash;
   $("adm").innerHTML=aSide()+`<div class="amain">${aTop()}<div id="abody">${body()}</div></div>`;
   $("adm").querySelectorAll("[data-av]").forEach(b=>b.onclick=()=>{if(b.dataset.av==="toSite")return closeAdmin();A.view=b.dataset.av;renderAdm();window.scrollTo(0,0)});
@@ -1241,17 +1252,23 @@ function bindHero(){const h=document.querySelector(".ahero");if(!h||!$("hPrev"))
   const set=i=>{A.slide=(i+n)%n;h.querySelectorAll("img").forEach((im,j)=>im.classList.toggle("on",j===A.slide));h.querySelectorAll(".hdots i").forEach((d,j)=>d.classList.toggle("on",j===A.slide));$("aQuote").textContent=[at("quote"),t("q1"),t("q2")][A.slide]};
   $("hPrev").onclick=()=>set((A.slide||0)-1);$("hNext").onclick=()=>set((A.slide||0)+1);
   clearInterval(A.heroT);if(!matchMedia("(prefers-reduced-motion: reduce)").matches)A.heroT=setInterval(()=>{if(!$("hNext"))return clearInterval(A.heroT);set((A.slide||0)+1)},8000)}
+async function saveRules(ev){ev.preventDefault();const f=new FormData(ev.target),d={};
+  for(const k in RULE_LIMITS){const v=Number(f.get(k)),[lo,hi]=RULE_LIMITS[k];
+    if(!Number.isInteger(v)||v<lo||v>hi)return toast(`${at("rulesBad")}: ${lo}–${hi}`);d[k]=v}
+  // Re-anchor rounds at the start of the current one, so changing the length keeps the round number and players' coins
+  d.base=period();d.epoch=roundStart();
+  const btn=ev.target.querySelector("[type=submit]");btn.disabled=true;
+  try{await S.db.doc("config/rules").set({...d,updatedAt:Date.now()});applyRules(d);toast(at("rulesSaved"));renderAdm(true)}
+  catch(x){btn.disabled=false;toast(authErr(x))}}
 function aSettings(){
   return `<h1 class="apage">${esc(at("asettings"))}</h1><div class="acol" style="max-width:680px">
    <div class="acard"><div class="row2">
      <label class="f">${esc(t("language"))}<select id="asLang">${LANGS.map(l=>`<option value="${l}" ${l===lang?"selected":""}>${{tj:"Тоҷикӣ",ru:"Русский",en:"English"}[l]}</option>`).join("")}</select></label>
      <label class="f">${esc(t("theme"))}<select id="asTheme">${["auto","light","dark"].map(x=>`<option value="${x}" ${x===theme?"selected":""}>${esc(t({auto:"tAuto",light:"tLight",dark:"tDark"}[x]))}</option>`).join("")}</select></label></div></div>
-   <div class="acard"><h2 style="margin-bottom:12px">${esc(at("rules"))}</h2><ul class="sys">
-     <li><span>⏱️</span><span>${esc(at("secPerQ"))}</span><b>${CFG.seconds}</b></li>
-     <li><span>🪙</span><span>${esc(at("coinsPerQ"))}</span><b>${CFG.coinsPerRight}</b></li>
-     <li><span>📆</span><span>${esc(at("dailyL"))}</span><b>${CFG.dailyLimit}</b></li>
-     <li><span>🔁</span><span>${esc(at("roundLen"))}</span><b>${CFG.roundDays} ${esc(t("days"))}</b></li></ul>
-     <p class="note" style="margin-top:10px">${esc(at("rulesNote"))}</p></div>
+   <div class="acard"><h2 style="margin-bottom:12px">${esc(at("rules"))}</h2><form id="rulesForm" novalidate><ul class="sys">
+     ${[["seconds","⏱️","secPerQ",""],["coinsPerRight","🪙","coinsPerQ",""],["dailyLimit","📆","dailyL",""],["roundDays","🔁","roundLen",t("days")]].map(([k,ic,l,u])=>`<li><span>${ic}</span><label for="r_${k}">${esc(at(l))}</label><b><input id="r_${k}" name="${k}" type="number" inputmode="numeric" min="${RULE_LIMITS[k][0]}" max="${RULE_LIMITS[k][1]}" step="1" value="${CFG[k]}" style="width:84px;text-align:right;font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--line,#ccc);background:transparent;color:inherit">${u?" "+esc(u):""}</b></li>`).join("")}</ul>
+     <p class="note" style="margin-top:10px">${esc(at("rulesNote"))}</p>
+     <button class="btn" type="submit" style="margin-top:6px">${esc(at("rulesSave"))}</button></form></div>
    <div class="acard"><button class="btn" id="asSite">${esc(at("toSite"))}</button></div></div>`}
 
 function topicThumbA(x){return IMG[x.id]?`<span class="th" style="background-image:url('${IMG[x.id]}')"></span>`:`<span class="th" style="background:${x.color?`linear-gradient(135deg,${x.color},#1B1A22)`:"linear-gradient(135deg,#5B6CF0,#8E5CE6)"};display:grid;place-items:center;color:#fff;font:800 18px Alegreya,serif">${x.id==="english"?"ABC":esc(topicName(x.id).charAt(0))}</span>`}
@@ -1385,6 +1402,7 @@ function bindAdmBody(){const b=$("abody");
   if($("asLang"))$("asLang").onchange=e=>{lang=e.target.value;try{localStorage.setItem("tanga_lang",lang)}catch(x){}renderAdm(true)};
   if($("asTheme"))$("asTheme").onchange=e=>{theme=e.target.value;try{localStorage.setItem("tanga_theme",theme)}catch(x){}applyTheme();renderAdm(true)};
   if($("asSite"))$("asSite").onclick=closeAdmin;
+  if($("rulesForm"))$("rulesForm").onsubmit=saveRules;
   if($("aRange")){$("aRange").onchange=e=>{A.range=+e.target.value;renderAdm(true)};bindChart(A.range)}
   if($("uS"))$("uS").oninput=e=>{A.uSearch=e.target.value;const pos=e.target.selectionStart;renderAdm(true);const n=$("uS");n.focus();n.setSelectionRange(pos,pos)};
   if($("qF"))$("qF").onchange=e=>{A.qFilter=e.target.value;paintAQList()};
@@ -1450,6 +1468,7 @@ function showALogin(msg){document.body.classList.add("adminmode");$("adm").hidde
       db.collection("questions").onSnapshot(s=>{S.questions=s.docs.map(d=>{const x={id:d.id,...d.data()};if(x.topic==="history")x.topic="tajik";return x});admSoft()},()=>{});
       db.collection("quizzes").onSnapshot(s=>{S.quizzes=s.docs.map(d=>({id:d.id,...d.data()}));admSoft()},()=>{});
       db.doc("config/topics").onSnapshot(s=>{applyCustom(s.exists?s.data().list:[]);admSoft()},()=>{});
+      db.doc("config/rules").onSnapshot(s=>{applyRules(s.exists?s.data():null);admSoft()},()=>{});
       db.doc("config/main").onSnapshot(s=>{const d=s.exists?s.data():null;S.prize=d&&d.period===period()?d.prize:null;admSoft()},()=>{});}
     openAdmin();
   });

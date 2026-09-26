@@ -429,8 +429,15 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const S={db:null,user:null,uid:null,admin:false,loaded:false,error:false,contact:null,questions:[],me:null,board:[],prize:null,view:"home",game:null};
 
-function period(){return Math.floor((Date.now()-CFG.epoch)/(CFG.roundDays*864e5))}
-function daysLeft(){const end=CFG.epoch+(period()+1)*CFG.roundDays*864e5;return Math.max(1,Math.ceil((end-Date.now())/864e5))}
+// base = number of the round that starts at epoch (lets the admin change roundDays without renumbering rounds)
+function period(){return (CFG.base||0)+Math.floor((Date.now()-CFG.epoch)/(CFG.roundDays*864e5))}
+function roundStart(){return CFG.epoch+(period()-(CFG.base||0))*CFG.roundDays*864e5}
+function daysLeft(){const end=roundStart()+CFG.roundDays*864e5;return Math.max(1,Math.ceil((end-Date.now())/864e5))}
+// Game rules edited in the admin panel (config/rules); invalid or missing values keep the defaults above
+const RULE_LIMITS={seconds:[5,300],coinsPerRight:[1,1000],dailyLimit:[1,1000],roundDays:[1,365]};
+function applyRules(d){if(!d)return;
+  for(const k in RULE_LIMITS){const v=+d[k],[lo,hi]=RULE_LIMITS[k];if(Number.isInteger(v)&&v>=lo&&v<=hi)CFG[k]=v}
+  if(Number.isFinite(+d.epoch)&&d.epoch)CFG.epoch=+d.epoch;if(Number.isInteger(+d.base))CFG.base=+d.base}
 function dayKey(d=new Date()){const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return z.toISOString().slice(0,10)}
 const KEEP=["hist","quizDone","avatar","nick","nickLower","totalAnswered","totalCorrect","days","lastTopic","activity","wrong"];
 function freshMe(){return{period:period(),coins:0,answered:[],day:dayKey(),dayCount:0,dayCoins:0,totalAnswered:0,totalCorrect:0,days:[],activity:[],wrong:[]}}
@@ -894,6 +901,7 @@ const fbReady=new Promise(r=>{if(window.FB)r();else addEventListener("fb-ready",
   db.collection("scores").where("period","==",period()).onSnapshot(s=>{S.board=s.docs.map(d=>({id:d.id,...d.data()}));soft()},()=>{});
   db.collection("quizzes").onSnapshot(s=>{S.quizzes=s.docs.map(d=>({id:d.id,...d.data()}));soft()},()=>{});
   db.doc("config/topics").onSnapshot(s=>{applyCustom(s.exists?s.data().list:[]);soft()},()=>{});
+  db.doc("config/rules").onSnapshot(s=>{applyRules(s.exists?s.data():null);soft()},()=>{});
   db.doc("config/main").onSnapshot(s=>{const d=s.exists?s.data():null;S.prize=d&&d.period===period()?d.prize:null;soft()},()=>{});
   FB.onAuth(async u=>{
     if(S.registering)return;
