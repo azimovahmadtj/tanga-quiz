@@ -9,3 +9,7 @@ export const firebaseConfig = {
   appId: "1:409648955196:web:03374047bc28e84dac6839",
   measurementId: "G-JEY1K4E972"
 };
+
+// Optional protection against bots and request floods (Firebase App Check with reCAPTCHA v3).
+// Leave empty to turn it off. See README → "App Check" for how to get a key.
+export const appCheckSiteKey = "";

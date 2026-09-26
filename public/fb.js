@@ -4,9 +4,14 @@ import { initializeFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnaps
          collection, query, where, limit, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
          signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig, appCheckSiteKey } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
+// App Check: only requests from this site (not scripts or bots) are accepted once it is enforced in the console
+if (appCheckSiteKey) {
+  const { initializeAppCheck, ReCaptchaV3Provider } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js");
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider(appCheckSiteKey), isTokenAutoRefreshEnabled: true });
+}
 const fdb = initializeFirestore(app, { ignoreUndefinedProperties: true });
 const auth = getAuth(app);
 

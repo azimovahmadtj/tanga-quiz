@@ -9,6 +9,54 @@ service cloud.firestore {
       return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    // ---- validation helpers: the server rejects anything the site itself would never write ----
+    function optStr(d, k, max) { return !(k in d) || (d[k] is string && d[k].size() <= max); }
+    function optInt(d, k, lo, hi) { return !(k in d) || (d[k] is int && d[k] >= lo && d[k] <= hi); }
+    function optList(d, k, max) { return !(k in d) || (d[k] is list && d[k].size() <= max); }
+    function optMap(d, k, max) { return !(k in d) || (d[k] is map && d[k].size() <= max); }
+
+    // Player progress written by the player's own browser
+    function validScore(d) {
+      return d.keys().hasOnly(['nick', 'nickLower', 'avatar', 'period', 'coins', 'answered', 'day',
+                               'dayCount', 'dayCoins', 'totalAnswered', 'totalCorrect', 'days',
+                               'activity', 'wrong', 'hist', 'quizDone', 'lastTopic', 'updatedAt'])
+        // nickname: 3–20 letters, digits or _ (same rule as the site), stored lower-cased for uniqueness
+        // (rules' lower() only handles Latin letters, so check the lower-cased copy has no capitals instead)
+        && (!('nick' in d) || (d.nick is string && d.nick.matches('^[\\p{L}\\p{N}_]{3,20}$')
+                               && d.nickLower is string && d.nickLower.size() == d.nick.size()
+                               && d.nickLower.matches('^[\\p{Ll}\\p{Lo}\\p{Lm}\\p{N}_]{3,20}$')))
+        // avatar: only an inline JPEG/PNG/WebP picture (no links to other sites), at most ~150 KB
+        && (!('avatar' in d) || d.avatar == ''
+            || (d.avatar is string && d.avatar.size() <= 200000
+                && d.avatar.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')))
+        && optInt(d, 'period', -100000, 100000)
+        && optInt(d, 'coins', 0, 10000000)
+        && optInt(d, 'dayCount', 0, 100000)
+        && optInt(d, 'dayCoins', 0, 10000000)
+        && optInt(d, 'totalAnswered', 0, 100000000)
+        && optInt(d, 'totalCorrect', 0, 100000000)
+        && optInt(d, 'updatedAt', 0, 9999999999999)
+        && optStr(d, 'day', 10)
+        && optStr(d, 'lastTopic', 100)
+        && optList(d, 'answered', 3000)
+        && optList(d, 'days', 120)
+        && optList(d, 'activity', 8)
+        && optList(d, 'wrong', 60)
+        && optMap(d, 'hist', 61)
+        && optMap(d, 'quizDone', 200);
+    }
+
+    // Private contact details written by the player's own browser
+    function validContact(d) {
+      return d.keys().hasOnly(['name', 'email', 'phone', 'agreedAt', 'createdAt', 'updatedAt'])
+        && optStr(d, 'name', 60)
+        && optStr(d, 'email', 100)
+        && optStr(d, 'phone', 30)
+        && optInt(d, 'agreedAt', 0, 9999999999999)
+        && optInt(d, 'createdAt', 0, 9999999999999)
+        && optInt(d, 'updatedAt', 0, 9999999999999);
+    }
+
     // List of admins: nobody can write it from the site; each admin can only see their own entry
     match /admins/{uid} {
       allow read: if isSelf(uid);
@@ -20,15 +68,18 @@ service cloud.firestore {
     match /quizzes/{id}   { allow read: if true; allow write: if isAdmin(); }
     match /config/{id}    { allow read: if true; allow write: if isAdmin(); }
 
-    // Player progress: public (leaderboard), each player edits only their own
+    // Player progress: public (leaderboard), each player edits only their own, with validated fields
     match /scores/{uid} {
       allow read: if true;
-      allow create, update, delete: if isSelf(uid) || isAdmin();
+      allow create, update: if isAdmin() || (isSelf(uid) && validScore(request.resource.data));
+      allow delete: if isSelf(uid) || isAdmin();
     }
 
     // Private contact details: only the player and the admin
     match /contacts/{uid} {
-      allow read, write: if isSelf(uid) || isAdmin();
+      allow read: if isSelf(uid) || isAdmin();
+      allow create, update: if isAdmin() || (isSelf(uid) && validContact(request.resource.data));
+      allow delete: if isSelf(uid) || isAdmin();
     }
   }
 }

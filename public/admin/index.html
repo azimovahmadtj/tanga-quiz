@@ -588,7 +588,9 @@ function streak(){const set=new Set(S.me?.days||[]);let n=0,d=new Date();if(!set
 function myRank(){if(!S.uid)return null;const rows=S.board.filter(r=>r.period===period()&&r.coins>0).sort((a,b)=>b.coins-a.coins);
   const i=rows.findIndex(r=>r.id===S.uid);return i<0?null:i+1}
 function ago(ts){const m=Math.floor((Date.now()-ts)/6e4);if(m<1)return t("now");if(m<60)return m+" "+t("mAgo");const h=Math.floor(m/60);if(h<24)return h+" "+t("hAgo");return Math.floor(h/24)+" "+t("dAgo")}
-function avaInner(src,nick){src=src===undefined?S.me?.avatar:src;nick=nick===undefined?S.me?.nick:nick;return src?`<img src="${esc(src)}" alt="">`:esc((nick||"?").trim().charAt(0).toUpperCase())}
+// Only inline pictures are shown as avatars: never links to other sites (tracking) or other URL schemes
+const SAFE_IMG=/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+function avaInner(src,nick){src=src===undefined?S.me?.avatar:src;nick=nick===undefined?S.me?.nick:nick;if(src&&!SAFE_IMG.test(src))src="";return src?`<img src="${esc(src)}" alt="">`:esc((nick||"?").trim().charAt(0).toUpperCase())}
 function isOut(){return false}
 function setOut(v){try{v?localStorage.setItem("tanga_out","1"):localStorage.removeItem("tanga_out")}catch(e){}}
 function initial(){return (S.me?.nick||"?").trim().charAt(0).toUpperCase()}

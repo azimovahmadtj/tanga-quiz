@@ -1,11 +1,60 @@
 {
   "hosting": {
     "public": "public",
-    "ignore": ["firebase.json", "**/.*"],
+    "ignore": [
+      "firebase.json",
+      "**/.*"
+    ],
     "cleanUrls": true,
+    "predeploy": [
+      "node scripts/csp.mjs --check"
+    ],
     "headers": [
-      { "source": "/admin/**", "headers": [ { "key": "X-Robots-Tag", "value": "noindex, nofollow" } ] }
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' 'sha256-0ANVCZzgK6bfpSsJHMK/sHLghWsr++RDIx0u3HHxrsQ=' 'sha256-y9qqxidyFt6NihJwObuNxgkdlHYdzFFGM/dbD8g7ELo=' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://apis.google.com https://www.google.com/recaptcha/; frame-src https://tanga-quiz.firebaseapp.com https://accounts.google.com https://www.google.com/recaptcha/; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=(), payment=()"
+          },
+          {
+            "key": "Strict-Transport-Security",
+            "value": "max-age=31536000; includeSubDomains"
+          },
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin-allow-popups"
+          }
+        ]
+      },
+      {
+        "source": "/admin/**",
+        "headers": [
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      }
     ]
   },
-  "firestore": { "rules": "firestore.rules" }
+  "firestore": {
+    "rules": "firestore.rules"
+  }
 }
