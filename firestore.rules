@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    // An admin is any account whose UID has a document in /admins (created by hand in the console)
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // List of admins: nobody can write it from the site; each admin can only see their own entry
+    match /admins/{uid} {
+      allow read: if isSelf(uid);
+      allow write: if false;
+    }
+
+    // Content managed only by the admin, readable by everyone
+    match /questions/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /quizzes/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /config/{id}    { allow read: if true; allow write: if isAdmin(); }
+
+    // Player progress: public (leaderboard), each player edits only their own
+    match /scores/{uid} {
+      allow read: if true;
+      allow create, update, delete: if isSelf(uid) || isAdmin();
+    }
+
+    // Private contact details: only the player and the admin
+    match /contacts/{uid} {
+      allow read, write: if isSelf(uid) || isAdmin();
+    }
+  }
+}
