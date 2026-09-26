@@ -251,7 +251,7 @@ body.authmode .app{display:none}
 .agree button{border:0;background:none;padding:0;color:var(--blue);font:inherit}
 .submit{width:100%;border:0;border-radius:18px;padding:17px;background:linear-gradient(90deg,#1A5CE6,#2E6BF0);color:#fff;font-size:19px;font-weight:600;display:flex;justify-content:center;align-items:center;gap:12px;box-shadow:0 10px 24px rgba(26,92,230,.35)}
 .submit[disabled]{opacity:.55;cursor:not-allowed}
-.aerr{color:var(--red);font-size:14px;margin:0 0 12px}
+.aerr{color:var(--red);font-size:14px;margin:0 0 12px;overflow-wrap:anywhere}
 .anote{background:var(--blue-soft);border-radius:14px;padding:12px 14px;font-size:14px;margin-bottom:16px}
 .alt{text-align:center;margin-top:22px;font-size:16px}.alt button{border:0;background:none;color:var(--blue);font:inherit;font-weight:500;padding:0}
 dialog.terms{border:0;border-radius:20px;padding:24px 26px;max-width:520px;background:var(--panel);color:var(--ink)}
@@ -1423,6 +1423,7 @@ function showALogin(msg){document.body.classList.add("adminmode");$("adm").hidde
   box.innerHTML=`<div class="alogin" style="--sideimg:url('${IMG.bside}')"><form class="alcard" id="alForm" novalidate>
     <div class="brand"><svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 2 7v2h20V7L12 2ZM4 10h3v8H4v-8Zm6.5 0h3v8h-3v-8ZM17 10h3v8h-3v-8ZM2 19h20v3H2v-3Z"/></svg><div><b>${esc(t("history"))}</b><span>${esc(at("panel"))}</span></div></div>
     <h1>${esc(at("alTitle"))}</h1><p class="note" style="margin:0 0 18px">${esc(at("alSub"))}</p>
+    <button class="gbtn" id="alG" type="button">${ICO.google}${esc(t("google"))}</button><div class="or">${esc(t("or"))}</div>
     <label class="fld">${ICO.mail}<input name="email" type="email" autocomplete="username" placeholder="${esc(t("email"))}"></label>
     ${passField("pass",at("alCode"),"current-password")}
     <p class="aerr" id="alErr" ${msg?"":"hidden"}>${esc(msg||"")}</p>
@@ -1430,6 +1431,7 @@ function showALogin(msg){document.body.classList.add("adminmode");$("adm").hidde
     <p class="alt"><a href="../">${esc(at("toSite"))}</a> · <button type="button" class="linkbtn" id="alFgt">${esc(t("forgot"))}</button></p>
   </form></div>`;
   bindEyes(box);
+  $("alG").onclick=async()=>{const e=$("alErr");e.hidden=true;try{await FB.google()}catch(x){const m=authErr(x);if(m){e.textContent=m;e.hidden=false}}};
   $("alFgt").onclick=async()=>{const em=$("alForm").email.value.trim(),e=$("alErr");if(!EMAIL_RE.test(em)){e.textContent=t("needEmail");e.hidden=false;return}
     try{await FB.reset(em);toast(t("resetSent"))}catch(x){e.textContent=authErr(x);e.hidden=false}};
   $("alForm").onsubmit=async ev=>{ev.preventDefault();const f=ev.target,e=$("alErr"),b=f.querySelector(".submit");
@@ -1441,7 +1443,7 @@ function showALogin(msg){document.body.classList.add("adminmode");$("adm").hidde
   FB.onAuth(async u=>{
     if(!u){S.admin=false;S.uid=null;return showALogin()}
     const ok=await FB.isAdmin(u.uid);
-    if(!ok){await FB.signOut();return showALogin(at("notAdmin"))}
+    if(!ok){await FB.signOut();return showALogin(at("notAdmin")+" · UID: "+u.uid)}
     S.uid=u.uid;S.admin=true;S.me={nick:(u.email||"admin").split("@")[0]};
     $("alog").hidden=true;
     if(!started){started=true;
