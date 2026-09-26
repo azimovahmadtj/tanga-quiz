@@ -663,7 +663,7 @@ function renderLogin(){$("view").innerHTML=`<div class="card empty" style="max-w
 const NICK_RE=/^[\p{L}\p{N}_]{3,20}$/u;
 function profileForm(isNew){const c=S.contact||{},m=S.me||{};
   return `<form class="add" id="regForm" novalidate>
-    <label class="f">${esc(t("nick"))}<input type="text" name="nick" maxlength="20" autocomplete="nickname" value="${esc(m.nick||"")}"></label>
+    <label class="f">${esc(t("nick"))}<input type="text" name="nick" maxlength="21" autocomplete="nickname" value="${esc(m.nick||"")}"></label>
     <label class="f">${esc(t("fullName"))}<input type="text" name="name" maxlength="60" autocomplete="name" value="${esc(c.name||"")}"></label>
     <div class="row2"><label class="f">${esc(t("email"))}<input type="text" name="email" maxlength="80" inputmode="email" autocomplete="email" value="${esc(c.email||"")}"></label>
     <label class="f">${esc(t("phone"))}<input type="text" name="phone" maxlength="25" inputmode="tel" autocomplete="tel" placeholder="+992 …" value="${esc(c.phone||"")}"></label></div>
@@ -717,7 +717,7 @@ function confirmDelete(){const d=$("terms");
 function bindProfileForm(isNew){
   $("regForm").onsubmit=async e=>{e.preventDefault();
     const f=new FormData(e.target),err=$("regErr");
-    const nick=String(f.get("nick")).trim(),name=String(f.get("name")).trim(),phone=String(f.get("phone")).trim(),email=String(f.get("email")).trim();
+    const nick=String(f.get("nick")).trim().replace(/^@+/,""),name=String(f.get("name")).trim(),phone=String(f.get("phone")).trim(),email=String(f.get("email")).trim();
     const fail=m=>{err.textContent=m;err.hidden=false};
     if(!nick||!name||!phone)return fail(t("needAll"));
     if(!NICK_RE.test(nick))return fail(t("nickBad"));
@@ -822,7 +822,7 @@ function renderAuth(){
       :`<button class="gbtn" id="gBtn" type="button">${ICO.google}${esc(t("google"))}</button><div class="or">${esc(t("or"))}</div>`}
     <form id="aForm" novalidate>
       <label class="fld">${ICO.user}<input name="name" autocomplete="name" maxlength="60" placeholder="${esc(t("fullName"))}" value="${esc(draft.name||"")}"></label>
-      <label class="fld">${ICO.at}<input name="nick" autocomplete="nickname" maxlength="20" placeholder="${esc(t("nick").replace(/\s*\(.*\)/,""))}" value="${esc(draft.nick||"")}"><small>${esc(t("nickHint"))}</small></label>
+      <label class="fld">${ICO.at}<input name="nick" autocomplete="nickname" maxlength="21" placeholder="${esc(t("nick").replace(/\s*\(.*\)/,""))}" value="${esc(draft.nick||"")}"><small>${esc(t("nickHint"))}</small></label>
       <label class="fld">${ICO.mail}<input name="email" type="email" autocomplete="email" maxlength="80" placeholder="${esc(t("email"))}" value="${esc(signed?authEmail:(draft.email||""))}" ${signed&&authEmail?"readonly":""}></label>
       <div class="fld">${ICO.phone}<span class="sep"></span>
         <select name="code" aria-label="Country code">${CODES.map(([c,f])=>`<option value="${c}" ${c===(draft.code||"+992")?"selected":""}>${f} ${c}</option>`).join("")}</select>
@@ -850,7 +850,7 @@ function openTerms(){const d=$("terms");
 const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 async function submitAuth(e){e.preventDefault();saveDraft();
   const f=e.target,d=draftMem,err=$("aErr"),fail=m=>{err.textContent=m;err.hidden=!m};
-  const name=String(d.name||"").trim(),nick=String(d.nick||"").trim(),email=String(d.email||"").trim(),digits=String(d.phone||"").replace(/\D/g,"");
+  const name=String(d.name||"").trim(),nick=String(d.nick||"").trim().replace(/^@+/,""),email=String(d.email||"").trim(),digits=String(d.phone||"").replace(/\D/g,"");
   const pw=f.pass?f.pass.value:"",pw2=f.pass2?f.pass2.value:"";
   if(!name||!nick||!email||!digits)return fail(t("fill"));
   if(!NICK_RE.test(nick))return fail(t("nickBad"));
