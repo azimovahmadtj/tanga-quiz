@@ -29,7 +29,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob: https://*.googleusercontent.com",
-  "connect-src 'self' https://*.googleapis.com https://apis.google.com https://www.google.com/recaptcha/",
+  "connect-src 'self' https://*.googleapis.com https://europe-west1-tanga-quiz.cloudfunctions.net https://apis.google.com https://www.google.com/recaptcha/",
   "frame-src https://tanga-quiz.firebaseapp.com https://accounts.google.com https://www.google.com/recaptcha/",
   "object-src 'none'",
   "base-uri 'self'",

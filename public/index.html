@@ -517,16 +517,15 @@ const RULE_LIMITS={seconds:[5,300],coinsPerRight:[1,1000],dailyLimit:[1,1000],ro
 function applyRules(d){if(!d)return;
   for(const k in RULE_LIMITS){const v=+d[k],[lo,hi]=RULE_LIMITS[k];if(Number.isInteger(v)&&v>=lo&&v<=hi)CFG[k]=v}
   if(Number.isFinite(+d.epoch)&&d.epoch)CFG.epoch=+d.epoch;if(Number.isInteger(+d.base))CFG.base=+d.base}
-function dayKey(d=new Date()){const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return z.toISOString().slice(0,10)}
+// Days are counted in Tajikistan time (UTC+5), the same as the server (functions/game.js)
+function dayKey(d=new Date()){return new Date(d.getTime()+5*36e5).toISOString().slice(0,10)}
 const KEEP=["hist","quizDone","avatar","nick","nickLower","totalAnswered","totalCorrect","days","lastTopic","lastQuiz","activity","wrong","day","dayCount"];
-// Daily counter follows the server rule: it restarts on a new day, but not sooner than 12 h after the last restart
-function resetDue(m){return m.day!==dayKey()&&(!S.dayStartMs||Date.now()-S.dayStartMs>=12*36e5)}
-function dayUsed(m){return resetDue(m)?0:(m.dayCount||0)}
+function dayUsed(m){return m.day===dayKey()?(m.dayCount||0):0}
 function freshMe(){return{period:period(),coins:0,answered:[],day:dayKey(),dayCount:0,dayCoins:0,totalAnswered:0,totalCorrect:0,days:[],activity:[],wrong:[]}}
 function normMe(d){
   let m=d?JSON.parse(JSON.stringify(d)):freshMe();
   if(m.period!==period()){const f=freshMe();KEEP.forEach(k=>{if(m[k]!==undefined)f[k]=m[k]});m=f}
-  if(resetDue(m))m.dayCoins=0;
+  if(m.day!==dayKey())m.dayCoins=0;
   for(const k of ["answered","days","activity","wrong"])if(!Array.isArray(m[k]))m[k]=[];
   m.totalAnswered=m.totalAnswered||0;m.totalCorrect=m.totalCorrect||0;m.dayCoins=m.dayCoins||0;
   return m}
@@ -699,30 +698,26 @@ function renderQuestion(){
   $("view").querySelectorAll("[data-o]").forEach(b=>b.onclick=()=>answer(+b.dataset.o));
   if($("nx"))$("nx").onclick=nextQ;if($("bk"))$("bk").onclick=()=>go("home");
 }
+// The answer is checked by the server (Cloud Function submitAnswer): the browser never knows the correct option
+// before answering, and coins and progress are written only by the server.
 async function answer(oi){
-  const g=S.game;if(!g||g.done)return;g.done=true;g.picked=oi;clearInterval(g.tick);
-  const m=S.me=normMe(S.me),ok=oi===g.cur.correct,now=Date.now();
-  const gain=g.bonus||CFG.coinsPerRight;
-  let resetDay=false;
-  if(g.quiz){m.quizDone=m.quizDone||{};m.quizDone[g.quiz]=[...(m.quizDone[g.quiz]||[]),g.cur.id];m.lastQuiz=g.quiz;m.totalAnswered++}
-  else{m.answered.push(g.cur.id);if(m.answered.length>3000)m.answered=m.answered.slice(-3000);
-    if(resetDue(m)){m.day=dayKey();m.dayCount=1;m.dayCoins=0;resetDay=true}else m.dayCount++;m.totalAnswered++}
-  if(ok){m.coins+=gain;m.dayCoins+=gain;m.totalCorrect++;m.wrong=m.wrong.filter(x=>x!==g.cur.id)}
-  else{m.wrong=[g.cur.id,...m.wrong.filter(x=>x!==g.cur.id)].slice(0,60)}
-  {const k=dayKey();m.hist=m.hist||{};m.hist[k]=(m.hist[k]||0)+1;const ks=Object.keys(m.hist).sort();if(ks.length>60)ks.slice(0,ks.length-60).forEach(x=>delete m.hist[x])}
-  if(!m.days.includes(dayKey()))m.days=[dayKey(),...m.days].slice(0,120);
-  const a=m.activity[0];
-  if(a&&a.topic===g.topic&&now-a.t<30*6e4){a.right+=ok?1:0;a.total++;a.t=now}else m.activity=[{topic:g.topic,right:ok?1:0,total:1,t:now},...m.activity].slice(0,8);
-  if(!g.quiz)m.lastTopic=g.topic;
-  renderQuestion();paintChrome();await saveMe({resetDay});
+  const g=S.game;if(!g||g.done||g.sending)return;g.sending=true;g.picked=oi;clearInterval(g.tick);
+  document.querySelectorAll("#view [data-o]").forEach(b=>b.disabled=true);
+  try{const r=await FB.call("submitAnswer",{qid:g.cur.id,choice:oi,quizId:g.quiz||null});
+    S.me=normMe(r.me);g.cur.correct=r.correct;g.done=true}
+  catch(e){const c=String(e?.code||"");g.done=true;g.cur.correct=undefined;
+    if(/resource-exhausted/.test(c)&&/daily/.test(e?.message||"")){S.game=null;S.view="home";paintChrome();return emptyState(t("limit"),t("limitT"))}
+    if(/failed-precondition/.test(c)&&g.quiz){S.game=null;S.view="home";paintChrome();return emptyState(t("qzClosed"),"")}
+    if(!/already-exists/.test(c))toast(/resource-exhausted/.test(c)?t("tooMany"):authErr(e))}
+  finally{g.sending=false}
+  renderQuestion();paintChrome();
 }
-// The server accepts at most one progress write per second, so writes are queued and spaced out
+// Profile changes (photo, mistakes list). The server accepts at most one write per second, so writes are spaced out.
 let saveChain=Promise.resolve(),lastSave=0;
-function saveMe(opts={}){
+function saveProfile(fields,opts={}){
   if(!S.db||!S.uid)return Promise.resolve();
   const run=async()=>{const wait=lastSave+1100-Date.now();if(wait>0)await new Promise(r=>setTimeout(r,wait));
-    try{await FB.writeScore(S.uid,S.me,opts);if(opts.resetDay)S.dayStartMs=Date.now()}catch(e){toast(authErr(e))}
-    finally{lastSave=Date.now()}};
+    try{await FB.writeProfile(S.uid,fields,opts)}catch(e){toast(authErr(e));throw e}finally{lastSave=Date.now()}};
   return saveChain=saveChain.then(run,run)}
 
 /* ---------- other pages ---------- */
@@ -752,10 +747,10 @@ function renderMine(){
   $("view").innerHTML=`<h1 class="pagehead">${esc(t("mine"))}</h1><div class="card" style="max-width:760px">
    <p class="note" style="margin:0 0 14px">${esc(t("mineIntro"))}</p>
    ${list.length?`<div style="display:grid;gap:10px">${list.map(q=>`<div class="review"><span class="tag">${esc(topicName(q.topic))}</span><p style="margin-top:8px">${esc(qLang(q.q))}</p>
-     <div class="ans">${esc(t("correctIs"))} <b>${esc((q.opts?.[lang]||q.opts?.tj||[])[q.correct])}</b></div></div>`).join("")}</div>
+     <div class="ans">${esc(t("correctIs"))} <b>${esc((q.opts?.[lang]||q.opts?.tj||[])[m.wrongAns?.[q.id]??q.correct]??"")}</b></div></div>`).join("")}</div>
      <button class="btn ghost" id="clr" style="margin-top:14px">${esc(t("clear"))}</button>`
      :`<div class="empty"><p>${esc(t("mineEmpty"))}</p></div>`}</div>`;
-  if($("clr"))$("clr").onclick=async()=>{S.me.wrong=[];await saveMe();renderMine()}}
+  if($("clr"))$("clr").onclick=async()=>{S.me.wrong=[];S.me.wrongAns={};await saveProfile({wrong:[],wrongAns:{}}).catch(()=>{});renderMine()}}
 function renderLogin(){$("view").innerHTML=`<div class="card empty" style="max-width:560px"><h3>${esc(t("loginTitle"))}</h3><p>${esc(t("loginText"))}</p></div>`}
 const NICK_RE=/^[\p{L}\p{N}_]{3,20}$/u;
 function profileForm(isNew){const c=S.contact||{},m=S.me||{};
@@ -890,7 +885,7 @@ function renderSettings(){
   $("setTheme").onchange=e=>{theme=e.target.value;try{localStorage.setItem("tanga_theme",theme)}catch(x){}applyTheme()};
   if($("regForm"))bindProfileForm(false);if($("openAuth"))$("openAuth").onclick=()=>showAuth("register");if($("openLogin"))$("openLogin").onclick=()=>showAuth("login");if($("openAuth2"))$("openAuth2").onclick=()=>showAuth("register");
   if($("photoIn"))$("photoIn").onchange=onPhoto;
-  if($("photoDel"))$("photoDel").onclick=async()=>{S.me.avatar="";await saveMe();toast(t("photoSaved"));renderSettings();paintChrome()};
+  if($("photoDel"))$("photoDel").onclick=async()=>{S.me.avatar="";await saveProfile({avatar:""}).catch(()=>{});toast(t("photoSaved"));renderSettings();paintChrome()};
   if($("logoutBtn"))$("logoutBtn").onclick=async()=>{await FB.signOut();toast(t("loggedOut"))};
   if($("delBtn"))$("delBtn").onclick=confirmDelete}
 async function onPhoto(e){const f=e.target.files?.[0];if(!f)return;
@@ -900,7 +895,7 @@ async function onPhoto(e){const f=e.target.files?.[0];if(!f)return;
     const n=160,c=document.createElement("canvas");c.width=c.height=n;const x=c.getContext("2d");
     const m=Math.min(img.naturalWidth,img.naturalHeight);
     x.drawImage(img,(img.naturalWidth-m)/2,(img.naturalHeight-m)/2,m,m,0,0,n,n);URL.revokeObjectURL(url);
-    S.me.avatar=c.toDataURL("image/jpeg",.82);await saveMe();toast(t("photoSaved"));render();
+    S.me.avatar=c.toDataURL("image/jpeg",.82);await saveProfile({avatar:S.me.avatar});toast(t("photoSaved"));render();
   }catch(x){toast(t("photoBad"))}}
 function confirmDelete(){const d=$("terms");
   d.innerHTML=`<h2>${esc(t("delTitle"))}</h2><p>${esc(t("delText"))}</p>
@@ -925,7 +920,7 @@ function bindProfileForm(isNew){
       const oldLower=S.me?.nickLower||"",owner=lower!==oldLower?await FB.nickOwner(lower):S.uid;
       if(owner&&owner!==S.uid){btn.disabled=false;return fail(t("nickTaken"))}
       S.me={...normMe(S.me),nick,nickLower:lower};S.contact={...(S.contact||{}),name,phone,email,updatedAt:Date.now()};
-      await saveChain;await FB.writeScore(S.uid,S.me,{claimNick:!owner,oldNickLower:oldLower,contact:S.contact});lastSave=Date.now();
+      await saveChain;await FB.writeProfile(S.uid,{nick,nickLower:lower},{claimNick:!owner,oldNickLower:oldLower,contact:S.contact});lastSave=Date.now();
       toast(t(isNew?"regDone":"profSaved"));
       if(isNew&&S.pending){const p=S.pending;S.pending=null;return startTopic(p)}
       if(isNew){S.view="home"}render();
@@ -1063,7 +1058,7 @@ async function submitAuth(e){e.preventDefault();saveDraft();
     if(!S.uid){const cred=await FB.signUp(email,pw);S.uid=cred.user.uid;S.authEmail=email}
     S.me={...normMe(S.uid&&S.me?S.me:null),nick,nickLower:lower};
     S.contact={name,email,phone:d.code+" "+digits,agreedAt:Date.now(),createdAt:S.contact?.createdAt||Date.now(),updatedAt:Date.now()};
-    await FB.writeScore(S.uid,S.me,{claimNick:!owner,contact:S.contact});lastSave=Date.now();
+    await (S.hadDoc?FB.writeProfile(S.uid,{nick,nickLower:lower},{claimNick:!owner,contact:S.contact}):FB.writeScore(S.uid,S.me,{claimNick:!owner,contact:S.contact}));S.hadDoc=true;lastSave=Date.now();
     S.registering=false;draftMem={};hideAuth();toast(`${t("welcome")}, ${nick}!`);
     if(S.pending){const p=S.pending;S.pending=null;S.view="home";return startTopic(p)}
     S.view="home";render();
@@ -1096,8 +1091,8 @@ const fbReady=new Promise(r=>{if(window.FB)r();else addEventListener("fb-ready",
     if(S.registering)return;
     if(u&&u.uid===S.uid&&S.me?.nick)return;
     S.uid=u?u.uid:null;S.authEmail=u?.email||"";S.authName=u?.displayName||"";S.contact=null;
-    if(S.uid){try{const snap=await db.doc("scores/"+S.uid).get();const d=snap.exists?snap.data():null;S.dayStartMs=d?.dayStart?.toMillis?.()||0;S.me=normMe(d)}catch(e){S.me=normMe(null)}
-      if(S.me?.nickLower)FB.nickOwner(S.me.nickLower).then(o=>{if(!o)return saveChain=saveChain.then(()=>FB.writeScore(S.uid,S.me,{claimNick:true})).catch(()=>{}).finally(()=>{lastSave=Date.now()});
+    if(S.uid){try{const snap=await db.doc("scores/"+S.uid).get();const d=snap.exists?snap.data():null;S.hadDoc=!!d;S.me=normMe(d)}catch(e){S.me=normMe(null)}
+      if(S.me?.nickLower)FB.nickOwner(S.me.nickLower).then(o=>{if(!o)return saveProfile({nick:S.me.nick,nickLower:S.me.nickLower},{claimNick:true}).catch(()=>{});
         if(o!==S.uid){toast(t("nickTaken"));go("settings")}}).catch(()=>{});
       try{const c=await db.doc("contacts/"+S.uid).get();if(c.exists)S.contact=c.data()}catch(e){}}
     else S.me=normMe(null);

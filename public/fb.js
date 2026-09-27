@@ -5,6 +5,7 @@ import { initializeFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnaps
          serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
          signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { firebaseConfig, appCheckSiteKey } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
@@ -15,6 +16,7 @@ if (appCheckSiteKey) {
 }
 const fdb = initializeFirestore(app, { ignoreUndefinedProperties: true });
 const auth = getAuth(app);
+const fns = getFunctions(app, "europe-west1");
 
 const snap = s => ({ id: s.id, exists: s.exists(), data: () => s.data() });
 function D(path) {
@@ -49,17 +51,38 @@ window.FB = {
   signOut: () => signOut(auth),
   reset: email => sendPasswordResetEmail(auth, email),
   deleteMe: () => deleteUser(auth.currentUser),
-  // Saves the player's progress. The server stamps the time (srvAt, dayStart), and a new nickname is
-  // reserved in /nicks in the same atomic batch, so the security rules can check all of it together.
-  writeScore: (uid, me, { resetDay = false, claimNick = false, oldNickLower = "", contact = null } = {}) => {
+  // Answers are checked and coins added only on the server (functions/game.js)
+  call: (name, data) => httpsCallable(fns, name)(data).then(r => r.data),
+  // Creates the player's score at registration. A new nickname is reserved in /nicks in the same atomic
+  // batch, so the security rules can check both together. Progress itself is only written by the server.
+  writeScore: (uid, me, { claimNick = false, oldNickLower = "", contact = null } = {}) => {
     const data = { ...me, updatedAt: Date.now(), srvAt: serverTimestamp() };
-    delete data.dayStart;
-    if (resetDay) data.dayStart = serverTimestamp();
     const b = writeBatch(fdb);
     b.set(doc(fdb, "scores/" + uid), data, { mergeFields: Object.keys(data).filter(k => data[k] !== undefined) });
     if (claimNick && me.nickLower) b.set(doc(fdb, "nicks/" + me.nickLower), { uid });
     if (oldNickLower && oldNickLower !== me.nickLower) b.delete(doc(fdb, "nicks/" + oldNickLower));
     if (contact) b.set(doc(fdb, "contacts/" + uid), contact);
+    return b.commit();
+  },
+  // Profile changes only: nickname, photo, the player's own mistakes list
+  writeProfile: (uid, fields, { claimNick = false, oldNickLower = "", contact = null } = {}) => {
+    const data = { ...fields, updatedAt: Date.now(), srvAt: serverTimestamp() };
+    const b = writeBatch(fdb);
+    b.set(doc(fdb, "scores/" + uid), data, { mergeFields: Object.keys(data).filter(k => data[k] !== undefined) });
+    if (claimNick && fields.nickLower) b.set(doc(fdb, "nicks/" + fields.nickLower), { uid });
+    if (oldNickLower && fields.nickLower && oldNickLower !== fields.nickLower) b.delete(doc(fdb, "nicks/" + oldNickLower));
+    if (contact) b.set(doc(fdb, "contacts/" + uid), contact);
+    return b.commit();
+  },
+  // Admin: the question is public, its correct option goes to the admin-only /answers collection
+  addQuestion: (q, correct) => {
+    const r = doc(collection(fdb, "questions")), b = writeBatch(fdb);
+    b.set(r, q); b.set(doc(fdb, "answers/" + r.id), { correct });
+    return b.commit();
+  },
+  deleteQuestion: id => {
+    const b = writeBatch(fdb);
+    b.delete(doc(fdb, "questions/" + id)); b.delete(doc(fdb, "answers/" + id));
     return b.commit();
   },
   nickOwner: async lower => { const s = await getDoc(doc(fdb, "nicks/" + lower)); return s.exists() ? s.data().uid : null; },

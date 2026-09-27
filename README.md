@@ -69,3 +69,22 @@ firebase serve              # ё: npx serve public
 2. Firebase Console → **Build → App Check → Apps** → барномаи веб → **reCAPTCHA** → Secret key-ро гузоред → **Save**.
 3. Site key-ро дар `public/firebase-config.js` ба `appCheckSiteKey` нависед ва `firebase deploy` кунед.
 4. Баъди як-ду рӯз, вақте дар App Check → **Metrics** дархостҳо «Verified» бошанд, дар **APIs → Cloud Firestore** тугмаи **Enforce**-ро пахш кунед. Аз он вақт база дархостҳоро танҳо аз сайти шумо қабул мекунад.
+
+## Cloud Functions (санҷиши ҷавобҳо дар сервер)
+Ҷавобҳои дуруст дар коллексияи пӯшидаи `answers/` нигоҳ дошта мешаванд. Онҳоро танҳо сервер ва админ мебинанд. Функсияи `submitAnswer` (`functions/game.js`) ҷавобро месанҷад ва тангаҳоро худаш илова мекунад; браузер пешрафтро тағйир дода наметавонад.
+
+1. Firebase Console → **Upgrade** → нақшаи **Blaze** (корти бонкӣ лозим; барои ҳаҷми хурд одатан $0). Дар **Budgets & alerts** маҳдудият гузоред, масалан $5.
+2. Дар папкаи лоиҳа:
+   ```bash
+   cd functions && npm install && cd ..
+   firebase deploy
+   ```
+3. `/admin` → **Танзимот** → **«Ҷавобҳоро пинҳон кардан»** (як бор). Ҷавобҳои саволҳои кӯҳна ба `answers/` мегузаранд.
+
+Муҳим: сайт, қоидаҳо ва функсияҳо бояд якҷоя деплой шаванд — версияи нави сайт бе функсия ҷавобҳоро сабт карда наметавонад.
+
+## Тестҳои амният
+182 санҷиш дар эмулятори Firebase (дастрасӣ ба ҳар коллексия, санҷиши маълумот, лақабҳо, функсияи ҷавобҳо):
+```bash
+cd functions && npm install && cd ../tests && npm install && npm test
+```

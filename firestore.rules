@@ -19,8 +19,8 @@ service cloud.firestore {
     function validScore(d) {
       return d.keys().hasOnly(['nick', 'nickLower', 'avatar', 'period', 'coins', 'answered', 'day',
                                'dayCount', 'dayCoins', 'totalAnswered', 'totalCorrect', 'days',
-                               'activity', 'wrong', 'hist', 'quizDone', 'lastTopic', 'lastQuiz', 'updatedAt',
-                               'srvAt', 'dayStart'])
+                               'activity', 'wrong', 'wrongAns', 'hist', 'quizDone', 'lastTopic', 'lastQuiz',
+                               'updatedAt', 'srvAt'])
         // nickname: 3–20 letters, digits or _ (same rule as the site), stored lower-cased for uniqueness
         // (rules' lower() only handles Latin letters, so check the lower-cased copy has no capitals instead)
         && (!('nick' in d) || (d.nick is string && d.nick.matches('^[\\p{L}\\p{N}_]{3,20}$')
@@ -45,61 +45,20 @@ service cloud.firestore {
         && optList(d, 'activity', 8)
         && optList(d, 'wrong', 60)
         && optMap(d, 'hist', 61)
-        && optMap(d, 'quizDone', 200);
+        && optMap(d, 'quizDone', 200)
+        && optMap(d, 'wrongAns', 61);
     }
 
 
-    // ---- anti-cheat: progress can only grow the way the game grows it ----
-    // Settings from the admin panel (config/rules), with the same defaults as the site code
-    function cfgVal(k, dflt) {
-      return exists(/databases/$(database)/documents/config/rules)
-        ? get(/databases/$(database)/documents/config/rules).data.get(k, dflt) : dflt;
-    }
-    function curPeriod() {
-      return cfgVal('base', 0) + math.floor((request.time.toMillis() - cfgVal('epoch', 1790553600000))
-                                             / (cfgVal('roundDays', 14) * 86400000.0));
-    }
-    function num(d, k) { return d.get(k, 0); }
-    function quizList(d, q) { return d.get('quizDone', {}).get(q, []); }
-    // An answer inside an active quiz: one more question of that quiz, within its question count
-    function isQuizAnswer(n, o) {
-      return 'lastQuiz' in n && n.lastQuiz is string
-        && quizList(n, n.lastQuiz).size() == quizList(o, n.lastQuiz).size() + 1
-        && exists(/databases/$(database)/documents/quizzes/$(n.lastQuiz))
-        && quizOk(get(/databases/$(database)/documents/quizzes/$(n.lastQuiz)).data, quizList(n, n.lastQuiz).size());
-    }
-    function quizOk(q, done) {
-      return request.time.toMillis() >= q.start && request.time.toMillis() <= q.end && done <= q.qids.size();
-    }
-    function quizBonus(n) { return get(/databases/$(database)/documents/quizzes/$(n.lastQuiz)).data.bonus; }
-    // The daily counter only goes up by one, and restarts at most every 12 hours (server clock)
-    function dayCountOk(n, o) {
-      return (num(n, 'dayCount') == num(o, 'dayCount') + 1
-              && n.get('dayStart', null) == o.get('dayStart', null))
-          || (num(n, 'dayCount') == 1 && n.get('dayStart', null) == request.time
-              && (!('dayStart' in o) || request.time > o.dayStart + duration.value(12, 'h')));
-    }
-    function progressOk(n, o) {
-      let dA = num(n, 'totalAnswered') - num(o, 'totalAnswered');
-      let dC = num(n, 'totalCorrect') - num(o, 'totalCorrect');
-      let quiz = dA == 1 && isQuizAnswer(n, o);
-      let regular = dA == 1 && !quiz;
-      let maxGain = dC == 0 ? 0 : (quiz ? quizBonus(n) : cfgVal('coinsPerRight', 10));
-      let samePeriod = n.get('period', 0) == o.get('period', n.get('period', 0));
-      return (dA == 0 || dA == 1) && dC >= 0 && dC <= dA
-        && (n.get('period', 0) == curPeriod() || n.get('period', 0) == curPeriod() - 1)
-        && (samePeriod ? num(n, 'coins') - num(o, 'coins') <= maxGain : num(n, 'coins') <= maxGain)
-        && (regular ? dayCountOk(n, o) && num(n, 'dayCount') <= cfgVal('dailyLimit', 30)
-                    : num(n, 'dayCount') == num(o, 'dayCount') && n.get('dayStart', null) == o.get('dayStart', null));
-    }
-    // At most one progress write per second (time comes from the server, not the browser)
+    // At most one profile write per second (time comes from the server, not the browser)
     function rateOk(n, o) {
       return n.srvAt == request.time && (!('srvAt' in o) || request.time > o.srvAt + duration.value(1, 's'));
     }
+    function num(d, k) { return d.get(k, 0); }
     // A new player starts from zero
     function freshOk(n) {
       return num(n, 'coins') == 0 && num(n, 'totalAnswered') == 0 && num(n, 'totalCorrect') == 0
-        && num(n, 'dayCount') == 0 && n.srvAt == request.time && !('dayStart' in n);
+        && num(n, 'dayCount') == 0 && n.srvAt == request.time;
     }
     // A nickname in scores must be reserved for this player in /nicks
     function ownsNick(uid, d) {
@@ -124,8 +83,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Content managed only by the admin, readable by everyone
-    match /questions/{id} { allow read: if true; allow write: if isAdmin(); }
+    // Content managed only by the admin, readable by everyone.
+    // Questions never carry the correct option: it lives in /answers, which only the admin and the server can read.
+    match /questions/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin() && !('correct' in request.resource.data);
+      allow delete: if isAdmin();
+    }
+    match /answers/{id}   { allow read, write: if isAdmin(); }
     match /quizzes/{id}   { allow read: if true; allow write: if isAdmin(); }
     match /config/{id}    { allow read: if true; allow write: if isAdmin(); }
 
@@ -134,9 +99,13 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isAdmin() || (isSelf(uid) && validScore(request.resource.data)
                                      && freshOk(request.resource.data) && ownsNick(uid, request.resource.data));
+      // The player may only change their profile (nickname, photo, their own mistakes list);
+      // coins, answers and all progress are written only by the submitAnswer Cloud Function
       allow update: if isAdmin() || (isSelf(uid) && validScore(request.resource.data)
+                                     && request.resource.data.diff(resource.data).affectedKeys()
+                                          .hasOnly(['nick', 'nickLower', 'avatar', 'wrong', 'wrongAns', 'updatedAt', 'srvAt'])
+                                     && request.resource.data.get('wrong', []).size() <= resource.data.get('wrong', []).size()
                                      && rateOk(request.resource.data, resource.data)
-                                     && progressOk(request.resource.data, resource.data)
                                      && ownsNick(uid, request.resource.data));
       allow delete: if isSelf(uid) || isAdmin();
     }
