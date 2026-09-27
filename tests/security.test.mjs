@@ -103,6 +103,10 @@ describe("player score: only the profile can change", () => {
   test("change photo", () => allow(profile(ctx("p1"), { avatar: img })));
   test("remove photo", () => allow(profile(ctx("p1"), { avatar: "" })));
   test("clear mistakes list", () => allow(profile(ctx("p1"), { wrong: [], wrongAns: {} })));
+  test("choose a region", () => allow(profile(ctx("p1"), { region: "TJ" })));
+  test("clear the region", () => allow(profile(ctx("p1"), { region: "" })));
+  for (const bad of ["tj", "TJK", "<b>", "T1", 42])
+    test(`rejects region ${JSON.stringify(bad)}`, () => deny(profile(ctx("p1"), { region: bad })));
   test("rename to a free nickname", () => allow(profile(ctx("p1"), { nick: "Player2", nickLower: "player2" }, { claim: true, drop: "player" })));
   test("Cyrillic nickname", () => allow(profile(ctx("p1"), { nick: "Бозингар", nickLower: "бозингар" }, { claim: true, drop: "player" })));
   const PROGRESS = { coins: 999999, totalAnswered: 9999, totalCorrect: 9999, dayCount: 0, dayCoins: 5000, period: 99,
@@ -225,6 +229,10 @@ describe("submitAnswer (server)", () => {
   test("an absurd quiz bonus falls back to the normal reward", async () => assert.equal((await ask({ qid: "q6", choice: 1, quizId: "huge" })).me.coins, 10));
   test("reward follows the admin settings", async () => { await put("config/rules", { coinsPerRight: 25, dailyLimit: 3, roundDays: 14, epoch: Date.UTC(2026, 8, 28) }); assert.equal((await ask({ qid: "q1", choice: 1 })).me.coins, 25); });
   test("out-of-range settings are ignored", async () => { await put("config/rules", { coinsPerRight: 5000, roundDays: 14, epoch: Date.UTC(2026, 8, 28) }); assert.equal((await ask({ qid: "q1", choice: 1 })).me.coins, 10); });
+  test("the player's region survives answering", async () => {
+    await put("scores/u1", { nick: "U", nickLower: "u", period: P0 - 1, coins: 0, region: "TJ" });
+    assert.equal((await ask({ qid: "q1", choice: 1 })).me.region, "TJ");
+  });
   test("a new round restarts coins but keeps totals", async () => {
     await put("scores/u1", { nick: "U", nickLower: "u", period: P0 - 1, coins: 900, answered: ["q1"], totalAnswered: 50, totalCorrect: 40 });
     const r = await ask({ qid: "q1", choice: 1 });

@@ -6,7 +6,7 @@ const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const DEFAULTS = { coinsPerRight: 10, dailyLimit: 30, seconds: 20, roundDays: 14, epoch: Date.UTC(2026, 8, 28), base: 0 };
 const LIMITS = { seconds: [5, 300], coinsPerRight: [1, 1000], dailyLimit: [1, 1000], roundDays: [1, 365] };
 const KEEP = ["hist", "quizDone", "avatar", "nick", "nickLower", "totalAnswered", "totalCorrect", "days", "lastTopic",
-  "lastQuiz", "activity", "wrong", "wrongAns", "day", "dayCount"];
+  "lastQuiz", "activity", "wrong", "wrongAns", "day", "dayCount", "region"];
 const ID_RE = /^[A-Za-z0-9_-]{1,100}$/;
 const MIN_GAP_MS = 800;
 
