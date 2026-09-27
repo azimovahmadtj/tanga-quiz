@@ -1,6 +1,6 @@
 // Service worker for the installable app (PWA): opens instantly and shows the app shell without a connection.
 // Only this site's own files are cached; Firebase data and sign-in always go to the network.
-const VERSION = "tanga-v1";
+const VERSION = "tanga-v2";
 const SHELL = ["/", "/fb.js", "/firebase-config.js", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", e => {
