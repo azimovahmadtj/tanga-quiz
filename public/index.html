@@ -518,12 +518,15 @@ function applyRules(d){if(!d)return;
   for(const k in RULE_LIMITS){const v=+d[k],[lo,hi]=RULE_LIMITS[k];if(Number.isInteger(v)&&v>=lo&&v<=hi)CFG[k]=v}
   if(Number.isFinite(+d.epoch)&&d.epoch)CFG.epoch=+d.epoch;if(Number.isInteger(+d.base))CFG.base=+d.base}
 function dayKey(d=new Date()){const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return z.toISOString().slice(0,10)}
-const KEEP=["hist","quizDone","avatar","nick","nickLower","totalAnswered","totalCorrect","days","lastTopic","activity","wrong"];
+const KEEP=["hist","quizDone","avatar","nick","nickLower","totalAnswered","totalCorrect","days","lastTopic","lastQuiz","activity","wrong","day","dayCount"];
+// Daily counter follows the server rule: it restarts on a new day, but not sooner than 12 h after the last restart
+function resetDue(m){return m.day!==dayKey()&&(!S.dayStartMs||Date.now()-S.dayStartMs>=12*36e5)}
+function dayUsed(m){return resetDue(m)?0:(m.dayCount||0)}
 function freshMe(){return{period:period(),coins:0,answered:[],day:dayKey(),dayCount:0,dayCoins:0,totalAnswered:0,totalCorrect:0,days:[],activity:[],wrong:[]}}
 function normMe(d){
   let m=d?JSON.parse(JSON.stringify(d)):freshMe();
   if(m.period!==period()){const f=freshMe();KEEP.forEach(k=>{if(m[k]!==undefined)f[k]=m[k]});m=f}
-  if(m.day!==dayKey()){m.day=dayKey();m.dayCount=0;m.dayCoins=0}
+  if(resetDue(m))m.dayCoins=0;
   for(const k of ["answered","days","activity","wrong"])if(!Array.isArray(m[k]))m[k]=[];
   m.totalAnswered=m.totalAnswered||0;m.totalCorrect=m.totalCorrect||0;m.dayCoins=m.dayCoins||0;
   return m}
@@ -589,7 +592,7 @@ function actsHTML(){
   return `<div class="card"><div class="sechead" style="margin:0 0 6px"><h2 class="t">${esc(t("recent"))}</h2>
    <button class="link" data-go="progress">${esc(t("progress"))} →</button></div>
    ${a.length?`<ul class="acts">${a.map(x=>`<li><span class="ic" style="background:${col[x.topic]||"var(--blue)"}">${CHECK}</span>
-     <span>${esc(topicName(x.topic))} — ${x.right}/${x.total}</span><span class="when">${esc(ago(x.t))}</span></li>`).join("")}</ul>`
+     <span>${esc(topicName(x.topic))} — ${+x.right||0}/${+x.total||0}</span><span class="when">${esc(ago(x.t))}</span></li>`).join("")}</ul>`
      :`<p class="note" style="margin:6px 0 0">${esc(t("noAct"))}</p>`}</div>`}
 function rightHTML(){
   const m=S.me||freshMe(),s=streak(),rank=myRank();
@@ -603,8 +606,8 @@ function rightHTML(){
       <div style="display:flex;align-items:center;gap:8px">${FLAME}<div><span class="note" style="display:block">${esc(t("streak"))}</span><b style="font-size:22px">${s} ${esc(t("days"))}</b></div></div></div>
     <div style="margin-top:8px;font-weight:600">${esc(m.nick||t("guest"))}</div>
     <div class="goal"><div class="row"><h3>${esc(t("todayStudy"))}</h3><span style="color:var(--red);font-size:22px">◎</span></div>
-      <div class="note" style="margin-top:4px">${m.dayCount} / ${CFG.dailyLimit} ${esc(t("qn"))}</div>
-      <div class="bar"><i style="width:${Math.min(100,m.dayCount/CFG.dailyLimit*100)}%"></i></div></div>
+      <div class="note" style="margin-top:4px">${dayUsed(m)} / ${CFG.dailyLimit} ${esc(t("qn"))}</div>
+      <div class="bar"><i style="width:${Math.min(100,dayUsed(m)/CFG.dailyLimit*100)}%"></i></div></div>
     <div class="mini">
       <div><span style="font-size:28px">🏆</span><div><span>${esc(t("today"))}</span><b>+${m.dayCoins}</b></div></div>
       <div><span style="font-size:28px">👑</span><div><span>${esc(t("rank"))}</span><b>${rank?"#"+rank:"—"}</b></div></div>
@@ -671,7 +674,7 @@ function nextQ(){
     if(!left.length){S.game=null;S.view="home";paintChrome();return emptyState(t("qzOver"),t("qzOverT"))}
     g.cur=left[0];
   }else{
-  if(m.dayCount>=CFG.dailyLimit){S.game=null;S.view="home";paintChrome();return emptyState(t("limit"),t("limitT"))}
+  if(dayUsed(m)>=CFG.dailyLimit){S.game=null;S.view="home";paintChrome();return emptyState(t("limit"),t("limitT"))}
   left=S.questions.filter(q=>q.topic===g.topic&&!m.answered.includes(q.id));
   if(!left.length){S.game=null;S.view="home";paintChrome();return emptyState(t("allDone"),t("allDoneT"))}
   g.cur=left[Math.floor(Math.random()*left.length)];}g.done=false;g.picked=null;g.remain=CFG.seconds;
@@ -700,8 +703,10 @@ async function answer(oi){
   const g=S.game;if(!g||g.done)return;g.done=true;g.picked=oi;clearInterval(g.tick);
   const m=S.me=normMe(S.me),ok=oi===g.cur.correct,now=Date.now();
   const gain=g.bonus||CFG.coinsPerRight;
-  if(g.quiz){m.quizDone=m.quizDone||{};m.quizDone[g.quiz]=[...(m.quizDone[g.quiz]||[]),g.cur.id];m.totalAnswered++}
-  else{m.answered.push(g.cur.id);if(m.answered.length>3000)m.answered=m.answered.slice(-3000);m.dayCount++;m.totalAnswered++}
+  let resetDay=false;
+  if(g.quiz){m.quizDone=m.quizDone||{};m.quizDone[g.quiz]=[...(m.quizDone[g.quiz]||[]),g.cur.id];m.lastQuiz=g.quiz;m.totalAnswered++}
+  else{m.answered.push(g.cur.id);if(m.answered.length>3000)m.answered=m.answered.slice(-3000);
+    if(resetDue(m)){m.day=dayKey();m.dayCount=1;m.dayCoins=0;resetDay=true}else m.dayCount++;m.totalAnswered++}
   if(ok){m.coins+=gain;m.dayCoins+=gain;m.totalCorrect++;m.wrong=m.wrong.filter(x=>x!==g.cur.id)}
   else{m.wrong=[g.cur.id,...m.wrong.filter(x=>x!==g.cur.id)].slice(0,60)}
   {const k=dayKey();m.hist=m.hist||{};m.hist[k]=(m.hist[k]||0)+1;const ks=Object.keys(m.hist).sort();if(ks.length>60)ks.slice(0,ks.length-60).forEach(x=>delete m.hist[x])}
@@ -709,12 +714,16 @@ async function answer(oi){
   const a=m.activity[0];
   if(a&&a.topic===g.topic&&now-a.t<30*6e4){a.right+=ok?1:0;a.total++;a.t=now}else m.activity=[{topic:g.topic,right:ok?1:0,total:1,t:now},...m.activity].slice(0,8);
   if(!g.quiz)m.lastTopic=g.topic;
-  renderQuestion();paintChrome();await saveMe();
+  renderQuestion();paintChrome();await saveMe({resetDay});
 }
-async function saveMe(){
-  if(!S.db||!S.uid)return;
-  try{await S.db.doc("scores/"+S.uid).set({...S.me,updatedAt:Date.now()})}catch(e){toast(authErr(e))}
-}
+// The server accepts at most one progress write per second, so writes are queued and spaced out
+let saveChain=Promise.resolve(),lastSave=0;
+function saveMe(opts={}){
+  if(!S.db||!S.uid)return Promise.resolve();
+  const run=async()=>{const wait=lastSave+1100-Date.now();if(wait>0)await new Promise(r=>setTimeout(r,wait));
+    try{await FB.writeScore(S.uid,S.me,opts);if(opts.resetDay)S.dayStartMs=Date.now()}catch(e){toast(authErr(e))}
+    finally{lastSave=Date.now()}};
+  return saveChain=saveChain.then(run,run)}
 
 /* ---------- other pages ---------- */
 function renderBoard(){
@@ -806,8 +815,8 @@ function pfChart(m){
 function pfRecent(m,n){const a=(m.activity||[]).slice(0,n);
   if(!a.length)return `<p class="empty-s">${esc(t("noAct"))}</p>`;
   return `<ul class="pf-list">${a.map(x=>{const p=x.total?Math.round(x.right/x.total*100):0;
-   return `<li><span class="th" ${pfThumb(x.topic)}>${pfMark(x.topic)}</span><div class="ti"><b>${esc(topicName(x.topic))}</b><span>${x.total} ${esc(t("qShort"))}</span></div>
-    <span class="ok">✔ ${p}%</span><span class="xp">+${x.right*XP_PER_CORRECT} XP</span><span class="ago">${esc(ago(x.t))}</span></li>`}).join("")}</ul>`}
+   return `<li><span class="th" ${pfThumb(x.topic)}>${pfMark(x.topic)}</span><div class="ti"><b>${esc(topicName(x.topic))}</b><span>${+x.total||0} ${esc(t("qShort"))}</span></div>
+    <span class="ok">✔ ${p}%</span><span class="xp">+${(+x.right||0)*XP_PER_CORRECT} XP</span><span class="ago">${esc(ago(x.t))}</span></li>`}).join("")}</ul>`}
 function pfRank(){const rows=pfRows();if(!rows.length)return `<p class="empty-s">${esc(t("noRank"))}</p>`;
   const i=rows.findIndex(r=>r.id===S.uid),show=rows.slice(0,3).map((r,j)=>[r,j]);if(i>=3)show.push([rows[i],i]);
   return `<ul class="pf-list pf-rank">${show.map(([r,j])=>`<li class="${r.id===S.uid?"me":""}"><span class="n">${j<3?["🥇","🥈","🥉"][j]:j+1}</span><span class="ava">${avaInner(r.avatar||"",r.nick||"")}</span>
@@ -898,7 +907,7 @@ function confirmDelete(){const d=$("terms");
    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px"><button class="btn ghost" id="dNo">${esc(t("cancel"))}</button><button class="btn" style="background:var(--red)" id="dYes">${esc(t("delConfirm"))}</button></div>`;
   $("dNo").onclick=()=>d.close();
   $("dYes").onclick=async()=>{$("dYes").disabled=true;
-    try{await S.db.doc("scores/"+S.uid).delete();await S.db.doc("contacts/"+S.uid).delete();
+    try{await FB.deleteMine(S.uid,S.me?.nickLower||"");
       d.close();toast(t("deletedAcc"));S.view="home";S.authMode="register";
       try{await FB.deleteMe()}catch(z){if(/recent-login/.test(z?.code||""))toast(t("reauth"));await FB.signOut()}
     }catch(x){$("dYes").disabled=false;toast(authErr(x))}};
@@ -913,11 +922,10 @@ function bindProfileForm(isNew){
     if(email&&!EMAIL_RE.test(email))return fail(t("emailBad"));
     const btn=e.target.querySelector("button[type=submit]");btn.disabled=true;
     try{const lower=nick.toLowerCase();
-      if(lower!==S.me?.nickLower){const dup=await S.db.collection("scores").where("nickLower","==",lower).limit(2).get();
-        if(dup.docs.some(d=>d.id!==S.uid)){btn.disabled=false;return fail(t("nickTaken"))}}
+      const oldLower=S.me?.nickLower||"",owner=lower!==oldLower?await FB.nickOwner(lower):S.uid;
+      if(owner&&owner!==S.uid){btn.disabled=false;return fail(t("nickTaken"))}
       S.me={...normMe(S.me),nick,nickLower:lower};S.contact={...(S.contact||{}),name,phone,email,updatedAt:Date.now()};
-      await S.db.doc("scores/"+S.uid).set({...S.me,updatedAt:Date.now()});
-      await S.db.doc("contacts/"+S.uid).set(S.contact);
+      await saveChain;await FB.writeScore(S.uid,S.me,{claimNick:!owner,oldNickLower:oldLower,contact:S.contact});lastSave=Date.now();
       toast(t(isNew?"regDone":"profSaved"));
       if(isNew&&S.pending){const p=S.pending;S.pending=null;return startTopic(p)}
       if(isNew){S.view="home"}render();
@@ -1049,14 +1057,13 @@ async function submitAuth(e){e.preventDefault();saveDraft();
   if(!d.agree)return fail(t("agreeNeed"));
   const btn=f.querySelector(".submit");btn.disabled=true;err.hidden=true;
   try{const lower=nick.toLowerCase();
-    const dup=await S.db.collection("scores").where("nickLower","==",lower).limit(2).get();
-    if(dup.docs.some(x=>x.id!==S.uid)){btn.disabled=false;return fail(t("nickTaken"))}
+    const owner=await FB.nickOwner(lower);
+    if(owner&&owner!==S.uid){btn.disabled=false;return fail(t("nickTaken"))}
     S.registering=true;
     if(!S.uid){const cred=await FB.signUp(email,pw);S.uid=cred.user.uid;S.authEmail=email}
     S.me={...normMe(S.uid&&S.me?S.me:null),nick,nickLower:lower};
     S.contact={name,email,phone:d.code+" "+digits,agreedAt:Date.now(),createdAt:S.contact?.createdAt||Date.now(),updatedAt:Date.now()};
-    await S.db.doc("scores/"+S.uid).set({...S.me,updatedAt:Date.now()});
-    await S.db.doc("contacts/"+S.uid).set(S.contact);
+    await FB.writeScore(S.uid,S.me,{claimNick:!owner,contact:S.contact});lastSave=Date.now();
     S.registering=false;draftMem={};hideAuth();toast(`${t("welcome")}, ${nick}!`);
     if(S.pending){const p=S.pending;S.pending=null;S.view="home";return startTopic(p)}
     S.view="home";render();
@@ -1089,7 +1096,9 @@ const fbReady=new Promise(r=>{if(window.FB)r();else addEventListener("fb-ready",
     if(S.registering)return;
     if(u&&u.uid===S.uid&&S.me?.nick)return;
     S.uid=u?u.uid:null;S.authEmail=u?.email||"";S.authName=u?.displayName||"";S.contact=null;
-    if(S.uid){try{const snap=await db.doc("scores/"+S.uid).get();S.me=normMe(snap.exists?snap.data():null)}catch(e){S.me=normMe(null)}
+    if(S.uid){try{const snap=await db.doc("scores/"+S.uid).get();const d=snap.exists?snap.data():null;S.dayStartMs=d?.dayStart?.toMillis?.()||0;S.me=normMe(d)}catch(e){S.me=normMe(null)}
+      if(S.me?.nickLower)FB.nickOwner(S.me.nickLower).then(o=>{if(!o)return saveChain=saveChain.then(()=>FB.writeScore(S.uid,S.me,{claimNick:true})).catch(()=>{}).finally(()=>{lastSave=Date.now()});
+        if(o!==S.uid){toast(t("nickTaken"));go("settings")}}).catch(()=>{});
       try{const c=await db.doc("contacts/"+S.uid).get();if(c.exists)S.contact=c.data()}catch(e){}}
     else S.me=normMe(null);
     const first=!S.loaded;S.loaded=true;

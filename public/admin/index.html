@@ -642,7 +642,7 @@ function actsHTML(){
   return `<div class="card"><div class="sechead" style="margin:0 0 6px"><h2 class="t">${esc(t("recent"))}</h2>
    <button class="link" data-go="progress">${esc(t("progress"))} →</button></div>
    ${a.length?`<ul class="acts">${a.map(x=>`<li><span class="ic" style="background:${col[x.topic]||"var(--blue)"}">${CHECK}</span>
-     <span>${esc(topicName(x.topic))} — ${x.right}/${x.total}</span><span class="when">${esc(ago(x.t))}</span></li>`).join("")}</ul>`
+     <span>${esc(topicName(x.topic))} — ${+x.right||0}/${+x.total||0}</span><span class="when">${esc(ago(x.t))}</span></li>`).join("")}</ul>`
      :`<p class="note" style="margin:6px 0 0">${esc(t("noAct"))}</p>`}</div>`}
 function rightHTML(){
   const m=S.me||freshMe(),s=streak(),rank=myRank();
