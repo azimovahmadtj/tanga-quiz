@@ -49,7 +49,12 @@ window.FB = {
   signIn: (email, pass) => signInWithEmailAndPassword(auth, email, pass),
   google: () => signInWithPopup(auth, new GoogleAuthProvider()),
   signOut: () => signOut(auth),
-  reset: email => sendPasswordResetEmail(auth, email),
+  // The email comes in the site's language (Firebase has no Tajik template, so Russian is used), and the
+  // link brings the player back to the site after the new password is set
+  reset: (email, lang = "ru") => {
+    auth.languageCode = lang === "en" ? "en" : "ru";
+    return sendPasswordResetEmail(auth, email, { url: location.origin + "/" });
+  },
   deleteMe: () => deleteUser(auth.currentUser),
   // Answers are checked and coins added only on the server (functions/game.js)
   call: (name, data) => httpsCallable(fns, name)(data).then(r => r.data),
