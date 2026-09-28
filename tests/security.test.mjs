@@ -254,6 +254,16 @@ describe("submitAnswer (server)", () => {
     assert.equal((await adminDb.doc("scores/u1").get()).data().coins, 10);
   });
   test("only an admin can move answers", () => code(game.migrateAnswers(adminDb, "u1"), "permission-denied"));
+  test("only an admin can import the cartoon questions", () => code(game.importCartoons(adminDb, "u1"), "permission-denied"));
+  test("cartoon import keeps the answers private and follows the key", async () => {
+    assert.equal((await game.importCartoons(adminDb, "boss")).added, 9);
+    const q = (await adminDb.doc("questions/cartoon08").get()).data();
+    assert.equal(q.topic, "cartoon"); assert.equal("correct" in q, false); assert.equal(q.img, "/img/cartoons/c08.jpg");
+    const key = { cartoon05: 2, cartoon07: 2, cartoon08: 0, cartoon09: 1, cartoon10: 1, cartoon11: 1, cartoon12: 0, cartoon13: 1, cartoon14: 1 };
+    for (const [id, c] of Object.entries(key)) assert.equal((await adminDb.doc(`answers/${id}`).get()).data().correct, c, id);
+    await deny(getDoc(doc(ctx("u1"), "answers/cartoon08")));
+    assert.equal((await ask({ qid: "cartoon08", choice: 0 })).ok, true);
+  });
   test("moving answers strips them from public questions", async () => {
     const r = await game.migrateAnswers(adminDb, "boss");
     assert.equal(r.moved, 1);

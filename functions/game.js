@@ -136,4 +136,16 @@ async function migrateAnswers(db, uid) {
   return { moved };
 }
 
-module.exports = { submitAnswer, migrateAnswers, GameError, readRules, periodOf, dayKey };
+// Adds the built-in "Карикатура" questions (public part to /questions, correct option to /answers). Safe to run again.
+async function importCartoons(db, uid) {
+  if (!uid || !(await db.doc(`admins/${uid}`).get()).exists) throw new GameError("permission-denied", "admins only");
+  const items = require("./seed/cartoons"), batch = db.batch(), now = Date.now();
+  for (const { id, correct, ...q } of items) {
+    batch.set(db.doc(`questions/${id}`), { ...q, topic: "cartoon", createdAt: now });
+    batch.set(db.doc(`answers/${id}`), { correct });
+  }
+  await batch.commit();
+  return { added: items.length };
+}
+
+module.exports = { submitAnswer, migrateAnswers, importCartoons, GameError, readRules, periodOf, dayKey };

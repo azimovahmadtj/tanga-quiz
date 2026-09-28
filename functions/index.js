@@ -21,3 +21,4 @@ const wrap = fn => async req => {
 
 exports.submitAnswer = onCall(opts, wrap(req => game.submitAnswer(db, req.auth?.uid, req.data)));
 exports.migrateAnswers = onCall(opts, wrap(req => game.migrateAnswers(db, req.auth?.uid)));
+exports.importCartoons = onCall(opts, wrap(req => game.importCartoons(db, req.auth?.uid)));
