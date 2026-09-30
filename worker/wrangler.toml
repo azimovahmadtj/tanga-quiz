@@ -1,0 +1,10 @@
+# Cloudflare Worker that checks answers for Танга (free plan, no card needed).
+# Deploy:  npm install  →  npx wrangler login  →  type path\to\key.json | npx wrangler secret put SERVICE_ACCOUNT  →  npx wrangler deploy
+name = "tanga-api"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+PROJECT_ID = "tanga-quiz"
+# Only these sites may call the API from a browser
+ALLOWED_ORIGINS = "https://tanga-quiz.web.app,https://tanga-quiz.firebaseapp.com,http://localhost:5000"

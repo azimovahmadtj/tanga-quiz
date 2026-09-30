@@ -6,7 +6,7 @@ import { initializeFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnaps
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
          signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
-import { firebaseConfig, appCheckSiteKey } from "./firebase-config.js";
+import { firebaseConfig, appCheckSiteKey, apiUrl } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 // App Check: only requests from this site (not scripts or bots) are accepted once it is enforced in the console
@@ -57,7 +57,17 @@ window.FB = {
   },
   deleteMe: () => deleteUser(auth.currentUser),
   // Answers are checked and coins added only on the server (functions/game.js)
-  call: (name, data) => httpsCallable(fns, name)(data).then(r => r.data),
+  // With apiUrl set (Cloudflare Worker, free plan) requests go there; otherwise to Firebase Cloud Functions (Blaze plan)
+  call: async (name, data) => {
+    if (!apiUrl) return httpsCallable(fns, name)(data).then(r => r.data);
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw Object.assign(new Error("sign in first"), { code: "unauthenticated" });
+    const r = await fetch(apiUrl.replace(/\/+$/, "") + "/" + name, { method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(data || {}) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(j.error?.message || "server error"), { code: j.error?.code || "internal" });
+    return j.result;
+  },
   // Creates the player's score at registration. A new nickname is reserved in /nicks in the same atomic
   // batch, so the security rules can check both together. Progress itself is only written by the server.
   writeScore: (uid, me, { claimNick = false, oldNickLower = "", contact = null } = {}) => {

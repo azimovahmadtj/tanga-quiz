@@ -13,3 +13,7 @@ export const firebaseConfig = {
 // Optional protection against bots and request floods (Firebase App Check with reCAPTCHA v3).
 // Leave empty to turn it off. See README → "App Check" for how to get a key.
 export const appCheckSiteKey = "";
+
+// Address of the Cloudflare Worker that checks answers (see worker/wrangler.toml), for example
+// "https://tanga-api.yourname.workers.dev". Leave empty to use Firebase Cloud Functions instead (Blaze plan).
+export const apiUrl = "";

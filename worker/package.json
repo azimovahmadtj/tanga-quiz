@@ -1,0 +1,12 @@
+{
+  "name": "tanga-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "login": "wrangler login"
+  },
+  "devDependencies": {
+    "wrangler": "^3.80.0"
+  }
+}
