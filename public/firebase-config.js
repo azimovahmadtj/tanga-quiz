@@ -16,4 +16,4 @@ export const appCheckSiteKey = "";
 
 // Address of the Cloudflare Worker that checks answers (see worker/wrangler.toml), for example
 // "https://tanga-api.yourname.workers.dev". Leave empty to use Firebase Cloud Functions instead (Blaze plan).
-export const apiUrl = "";
+export const apiUrl = "https://tanga-api.tanga-quiz.workers.dev";
