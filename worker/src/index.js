@@ -25,11 +25,11 @@ async function submitAnswer(store, uid, data, now) {
   const { qid, choice, quizId } = validate(data);
   for (let attempt = 0; attempt < 3; attempt++) {
     const tx = await store.begin();
-    const [score, question, answer, rules, quiz] = await store.getAll(
-      [`scores/${uid}`, `questions/${qid}`, `answers/${qid}`, "config/rules", ...(quizId ? [`quizzes/${quizId}`] : [])], tx);
+    const [score, question, answer, rules, quiz, entry] = await store.getAll(
+      [`scores/${uid}`, `questions/${qid}`, `answers/${qid}`, "config/rules", ...(quizId ? [`quizzes/${quizId}`, `entries/${quizId}_${uid}`] : [])], tx);
     let res;
     try {
-      res = applyAnswer({ score, lastMs: score?.srvAt?.__ts || 0, question, answer, rules, quiz: quiz ?? null, qid, choice, quizId, now });
+      res = applyAnswer({ score, lastMs: score?.srvAt?.__ts || 0, question, answer, rules, quiz: quiz ?? null, entry: entry ?? null, qid, choice, quizId, now });
     } catch (e) { await store.rollback(tx); throw e; }
     try {
       await store.commit([store.set(`scores/${uid}`, { ...res.m, srvAt: { __ts: now } })], tx);

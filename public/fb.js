@@ -1,7 +1,7 @@
 // Firebase bridge for Танга — shared by the site (/) and the admin panel (/admin/)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { initializeFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
-         collection, query, where, limit, getDocs, addDoc,
+         collection, query, where, limit, orderBy, getDocs, addDoc,
          serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
          signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -35,6 +35,7 @@ function C(path, cons = []) {
   return {
     where: (f, o, v) => C(path, [...cons, where(f, o, v)]),
     limit: n => C(path, [...cons, limit(n)]),
+    orderBy: (f, dir) => C(path, [...cons, orderBy(f, dir)]),
     get: async () => ({ docs: (await getDocs(q())).docs.map(snap) }),
     onSnapshot: (cb, err) => onSnapshot(q(), s => cb({ docs: s.docs.map(snap) }), err),
     add: d => addDoc(base, d),

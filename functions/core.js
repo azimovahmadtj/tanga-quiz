@@ -2,10 +2,10 @@
 // and the Cloudflare Worker (worker/). Plain JavaScript without database code, so both use exactly the same logic.
 
 // Same defaults and limits as the site (public/index.html → CFG, RULE_LIMITS)
-const DEFAULTS = { coinsPerRight: 10, dailyLimit: 30, seconds: 20, roundDays: 14, epoch: Date.UTC(2026, 8, 28), base: 0 };
+const DEFAULTS = { coinsPerRight: 4, dailyLimit: 30, seconds: 20, roundDays: 14, epoch: Date.UTC(2026, 8, 28), base: 0 };
 const LIMITS = { seconds: [5, 300], coinsPerRight: [1, 1000], dailyLimit: [1, 1000], roundDays: [1, 365] };
 const KEEP = ["hist", "quizDone", "avatar", "nick", "nickLower", "totalAnswered", "totalCorrect", "days", "lastTopic",
-  "lastQuiz", "activity", "wrong", "wrongAns", "day", "dayCount", "region"];
+  "lastQuiz", "activity", "wrong", "wrongAns", "day", "dayCount", "region", "quizCoins"];
 const ID_RE = /^[A-Za-z0-9_-]{1,100}$/;
 const MIN_GAP_MS = 800;
 
@@ -39,7 +39,7 @@ function normalize(d, period, day) {
   if (m.day !== day) { m.day = day; m.dayCount = 0; m.dayCoins = 0; }
   for (const k of ["coins", "dayCount", "dayCoins", "totalAnswered", "totalCorrect"]) m[k] = int(m[k]);
   for (const k of ["answered", "days", "activity", "wrong"]) m[k] = list(m[k]);
-  for (const k of ["hist", "quizDone", "wrongAns"]) m[k] = { ...map(m[k]) };
+  for (const k of ["hist", "quizDone", "wrongAns", "quizCoins"]) m[k] = { ...map(m[k]) };
   return m;
 }
 
@@ -55,7 +55,8 @@ function validate(data) {
 
 // Applies one answer to a player's score. Inputs are plain document data (null when the document is missing);
 // lastMs is the time of the player's previous server write. Returns the new score, or throws a GameError.
-function applyAnswer({ score, lastMs, question, answer, rules, quiz, qid, choice, quizId, now }) {
+// entry is the player's /entries/{quizId}_{uid} document: quizzes with an entry fee only count paid players.
+function applyAnswer({ score, lastMs, question, answer, rules, quiz, entry, qid, choice, quizId, now }) {
   if (!score || !score.nick) throw new GameError("failed-precondition", "register first");
   if (!question) throw new GameError("not-found", "no such question");
   const correct = answer ? answer.correct : question.correct;
@@ -71,6 +72,7 @@ function applyAnswer({ score, lastMs, question, answer, rules, quiz, qid, choice
     const z = quiz;
     if (!(now >= z.start && now <= z.end)) throw new GameError("failed-precondition", "quiz is not active");
     if (!list(z.qids).includes(qid)) throw new GameError("invalid-argument", "question is not in this quiz");
+    if (Number(z.entryFee) > 0 && !(entry && entry.paid === true)) throw new GameError("failed-precondition", "entry fee not paid");
     const done = list(m.quizDone[quizId]);
     if (done.includes(qid)) throw new GameError("already-exists", "already answered");
     m.quizDone[quizId] = [...done, qid];
@@ -91,6 +93,8 @@ function applyAnswer({ score, lastMs, question, answer, rules, quiz, qid, choice
   const ok = choice === correct;
   if (ok) {
     m.coins += gain; m.dayCoins += gain; m.totalCorrect++;
+    // Points in each quiz, for its winners table (prizes go to the top 3)
+    if (quizId) { m.quizCoins[quizId] = int(m.quizCoins[quizId]) + gain; const ks = Object.keys(m.quizCoins); if (ks.length > 150) delete m.quizCoins[ks[0]]; }
     m.wrong = m.wrong.filter(x => x !== qid); delete m.wrongAns[qid];
   } else {
     m.wrong = [qid, ...m.wrong.filter(x => x !== qid)].slice(0, 60);

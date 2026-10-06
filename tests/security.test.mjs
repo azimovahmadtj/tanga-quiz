@@ -181,6 +181,32 @@ describe("contacts", () => {
 });
 
 // ---------------------------------------------------------------- 3. answer checking on the server
+describe("quiz entries (entry fee)", () => {
+  beforeEach(seed);
+  const entry = (o = {}) => ({ quizId: "z1", uid: "p1", nick: "Player", createdAt: NOW, paid: false, ...o });
+  test("a player can ask to take part", () => allow(setDoc(doc(ctx("p1"), "entries/z1_p1"), entry())));
+  test("cannot mark their own entry as paid", () => deny(setDoc(doc(ctx("p1"), "entries/z1_p1"), entry({ paid: true }))));
+  test("cannot ask for someone else", () => deny(setDoc(doc(ctx("p1"), "entries/z1_champ"), entry({ uid: "champ" }))));
+  test("the id must match quiz and player", () => deny(setDoc(doc(ctx("p1"), "entries/other_p1"), entry())));
+  test("only for an existing quiz", () => deny(setDoc(doc(ctx("p1"), "entries/nope_p1"), entry({ quizId: "nope" }))));
+  test("rejects extra fields", () => deny(setDoc(doc(ctx("p1"), "entries/z1_p1"), entry({ coins: 5 }))));
+  test("signed-out visitors cannot ask", () => deny(setDoc(doc(ctx("anon"), "entries/z1_p1"), entry())));
+  describe("after the request", () => {
+    beforeEach(() => env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), "entries/z1_p1"), entry())));
+    test("the player sees their own entry", () => allow(getDoc(doc(ctx("p1"), "entries/z1_p1"))));
+    test("another player cannot see it", () => deny(getDoc(doc(ctx("champ"), "entries/z1_p1"))));
+    test("the player cannot confirm the payment", () => deny(updateDoc(doc(ctx("p1"), "entries/z1_p1"), { paid: true })));
+    test("the admin confirms the payment", () => allow(updateDoc(doc(ctx("boss"), "entries/z1_p1"), { paid: true, paidAt: NOW })));
+    test("the player can withdraw an unpaid request", () => allow(deleteDoc(doc(ctx("p1"), "entries/z1_p1"))));
+  });
+  test("quiz points stored by the server do not block profile changes", async () => {
+    await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), "scores/p1"), score({ nick: "Player", nickLower: "player", quizCoins: { z1: 12 } })));
+    await allow(updateDoc(doc(ctx("p1"), "scores/p1"), { region: "TJ", updatedAt: NOW, srvAt: serverTimestamp() }));
+  });
+  test("a player cannot give themselves quiz points", () =>
+    deny(updateDoc(doc(ctx("p1"), "scores/p1"), { quizCoins: { z1: 999 }, updatedAt: NOW, srvAt: serverTimestamp() })));
+});
+
 describe("submitAnswer (server)", () => {
   const T0 = Date.UTC(2026, 9, 5, 8);           // a fixed moment inside round 0 with the default settings
   const P0 = game.periodOf(game.readRules({ roundDays: 14, epoch: Date.UTC(2026, 8, 28) }), T0);
@@ -201,6 +227,29 @@ describe("submitAnswer (server)", () => {
   const ask = (data, t = T0, uid = "u1") => game.submitAnswer(adminDb, uid, data, t);
 
   test("refuses a signed-out caller", () => code(ask({ qid: "q1", choice: 1 }, T0, null), "unauthenticated"));
+  test("quiz with an entry fee: refused without a request", async () => {
+    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5"] });
+    await code(ask({ qid: "q5", choice: 1, quizId: "paid" }), "failed-precondition");
+  });
+  test("quiz with an entry fee: refused while unpaid", async () => {
+    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5"] });
+    await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: false });
+    await code(ask({ qid: "q5", choice: 1, quizId: "paid" }), "failed-precondition");
+  });
+  test("quiz with an entry fee: paid players play and their quiz points are kept", async () => {
+    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5", "q6"] });
+    await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: true });
+    const r = await ask({ qid: "q5", choice: 1, quizId: "paid" });
+    assert.equal(r.gain, 4); assert.equal(r.me.quizCoins.paid, 4);
+    await ask({ qid: "q6", choice: 0, quizId: "paid" }, T0 + 2000);
+    assert.equal((await adminDb.doc("scores/u1").get()).data().quizCoins.paid, 4);
+  });
+  test("a paid entry for another quiz does not count", async () => {
+    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5"] });
+    await put("entries/z1_u1", { quizId: "z1", uid: "u1", nick: "U", createdAt: T0, paid: true });
+    await code(ask({ qid: "q5", choice: 1, quizId: "paid" }), "failed-precondition");
+  });
+
   for (const [name, bad] of [["null", null], ["an array", []], ["a string", "q1"], ["an empty object", {}], ["a numeric id", { qid: 1, choice: 1 }],
     ["an id with a slash", { qid: "a/b", choice: 1 }], ["a 101-char id", { qid: "x".repeat(101), choice: 1 }], ["a text choice", { qid: "q1", choice: "1" }],
     ["a fractional choice", { qid: "q1", choice: 1.5 }], ["choice 99", { qid: "q1", choice: 99 }], ["choice -2", { qid: "q1", choice: -2 }],
@@ -236,7 +285,7 @@ describe("submitAnswer (server)", () => {
   test("a quiz question cannot be answered twice", async () => { await ask({ qid: "q5", choice: 1, quizId: "z1" }); await code(ask({ qid: "q5", choice: 1, quizId: "z1" }, T0 + 5000), "already-exists"); });
   test("an absurd quiz bonus falls back to the normal reward", async () => assert.equal((await ask({ qid: "q6", choice: 1, quizId: "huge" })).me.coins, 10));
   test("reward follows the admin settings", async () => { await put("config/rules", { coinsPerRight: 25, dailyLimit: 3, roundDays: 14, epoch: Date.UTC(2026, 8, 28) }); assert.equal((await ask({ qid: "q1", choice: 1 })).me.coins, 25); });
-  test("out-of-range settings are ignored", async () => { await put("config/rules", { coinsPerRight: 5000, roundDays: 14, epoch: Date.UTC(2026, 8, 28) }); assert.equal((await ask({ qid: "q1", choice: 1 })).me.coins, 10); });
+  test("out-of-range settings are ignored", async () => { await put("config/rules", { coinsPerRight: 5000, roundDays: 14, epoch: Date.UTC(2026, 8, 28) }); assert.equal((await ask({ qid: "q1", choice: 1 })).me.coins, 4); });   // falls back to the default of 4 coins
   test("the player's region survives answering", async () => {
     await put("scores/u1", { nick: "U", nickLower: "u", period: P0 - 1, coins: 0, region: "TJ" });
     assert.equal((await ask({ qid: "q1", choice: 1 })).me.region, "TJ");

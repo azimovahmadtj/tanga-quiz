@@ -20,7 +20,7 @@ service cloud.firestore {
       return d.keys().hasOnly(['nick', 'nickLower', 'avatar', 'period', 'coins', 'answered', 'day',
                                'dayCount', 'dayCoins', 'totalAnswered', 'totalCorrect', 'days',
                                'activity', 'wrong', 'wrongAns', 'hist', 'quizDone', 'lastTopic', 'lastQuiz',
-                               'region', 'updatedAt', 'srvAt'])
+                               'region', 'quizCoins', 'updatedAt', 'srvAt'])
         // nickname: 3–20 letters, digits or _ (same rule as the site), stored lower-cased for uniqueness
         // (rules' lower() only handles Latin letters, so check the lower-cased copy has no capitals instead)
         && (!('nick' in d) || (d.nick is string && d.nick.matches('^[\\p{L}\\p{N}_]{3,20}$')
@@ -48,7 +48,8 @@ service cloud.firestore {
         && optList(d, 'wrong', 60)
         && optMap(d, 'hist', 61)
         && optMap(d, 'quizDone', 200)
-        && optMap(d, 'wrongAns', 61);
+        && optMap(d, 'wrongAns', 61)
+        && optMap(d, 'quizCoins', 200);
     }
 
 
@@ -121,6 +122,23 @@ service cloud.firestore {
                     && getAfter(/databases/$(database)/documents/scores/$(request.auth.uid)).data.get('nickLower', '') == nick;
       allow update: if false;
       allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    // Quiz entries (quizzes with an entry fee): the player asks to take part, the admin marks the fee as paid.
+    // The id is "<quizId>_<uid>"; only the server counts answers in such a quiz, and only for paid entries.
+    match /entries/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+                    && request.resource.data.keys().hasOnly(['quizId', 'uid', 'nick', 'createdAt', 'paid'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.quizId is string
+                    && id == request.resource.data.quizId + '_' + request.auth.uid
+                    && exists(/databases/$(database)/documents/quizzes/$(request.resource.data.quizId))
+                    && request.resource.data.paid == false
+                    && request.resource.data.nick is string && request.resource.data.nick.size() <= 20
+                    && request.resource.data.createdAt is int;
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.paid == false);
     }
 
     // Private contact details: only the player and the admin

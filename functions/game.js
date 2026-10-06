@@ -7,12 +7,13 @@ async function submitAnswer(db, uid, data, now = Date.now()) {
   const { qid, choice, quizId } = validate(data);
   const scoreRef = db.doc(`scores/${uid}`);
   return db.runTransaction(async tx => {
-    const [sS, qS, aS, cS, zS] = await Promise.all([
+    const [sS, qS, aS, cS, zS, eS] = await Promise.all([
       tx.get(scoreRef), tx.get(db.doc(`questions/${qid}`)), tx.get(db.doc(`answers/${qid}`)),
-      tx.get(db.doc("config/rules")), quizId ? tx.get(db.doc(`quizzes/${quizId}`)) : Promise.resolve(null)]);
+      tx.get(db.doc("config/rules")), quizId ? tx.get(db.doc(`quizzes/${quizId}`)) : Promise.resolve(null),
+      quizId ? tx.get(db.doc(`entries/${quizId}_${uid}`)) : Promise.resolve(null)]);
     const d = x => (x && x.exists ? x.data() : null);
     const { m, ok, correct, gain } = applyAnswer({
-      score: d(sS), lastMs: d(sS)?.srvAt?.toMillis?.() || 0, question: d(qS), answer: d(aS), rules: d(cS), quiz: d(zS),
+      score: d(sS), lastMs: d(sS)?.srvAt?.toMillis?.() || 0, question: d(qS), answer: d(aS), rules: d(cS), quiz: d(zS), entry: d(eS),
       qid, choice, quizId, now });
     tx.set(scoreRef, { ...m, srvAt: Timestamp.fromMillis(now) });
     return { ok, correct, gain, me: m };
