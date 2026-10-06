@@ -724,7 +724,7 @@ function nextQ(){
 }
 function renderQuestion(){
   const g=S.game;if(!g?.cur)return renderHome();const q=g.cur;
-  const opts=q.opts?.[lang]||q.opts?.tj||[];
+  const opts=q.opts?.[lang]||q.opts?.tj||q.opts?.ru||q.opts?.en||[];
   $("view").innerHTML=`<div class="card" style="max-width:760px">
    <div class="qhead"><span>${esc(topicName(g.topic))} · +${g.bonus||CFG.coinsPerRight} ${esc(t("coins"))}</span><span><span id="secs">${g.remain}</span> ${esc(t("sec"))}</span></div>
    <div class="timer${g.remain<=5?" low":""}"><i style="width:${g.remain/CFG.seconds*100}%"></i></div>
@@ -787,7 +787,7 @@ function renderMine(){
   $("view").innerHTML=`<h1 class="pagehead">${esc(t("mine"))}</h1><div class="card" style="max-width:760px">
    <p class="note" style="margin:0 0 14px">${esc(t("mineIntro"))}</p>
    ${list.length?`<div style="display:grid;gap:10px">${list.map(q=>`<div class="review"><span class="tag">${esc(topicName(q.topic))}</span><p style="margin-top:8px">${esc(qLang(q.q))}</p>
-     <div class="ans">${esc(t("correctIs"))} <b>${esc((q.opts?.[lang]||q.opts?.tj||[])[m.wrongAns?.[q.id]??q.correct]??"")}</b></div></div>`).join("")}</div>
+     <div class="ans">${esc(t("correctIs"))} <b>${esc((q.opts?.[lang]||q.opts?.tj||q.opts?.ru||q.opts?.en||[])[m.wrongAns?.[q.id]??q.correct]??"")}</b></div></div>`).join("")}</div>
      <button class="btn ghost" id="clr" style="margin-top:14px">${esc(t("clear"))}</button>`
      :`<div class="empty"><p>${esc(t("mineEmpty"))}</p></div>`}</div>`;
   if($("clr"))$("clr").onclick=async()=>{S.me.wrong=[];S.me.wrongAns={};await saveProfile({wrong:[],wrongAns:{}}).catch(()=>{});renderMine()}}

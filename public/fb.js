@@ -96,6 +96,17 @@ window.FB = {
     b.set(r, q); b.set(doc(fdb, "answers/" + r.id), { correct });
     return b.commit();
   },
+  // Admin: many questions at once (batches of 200 questions = 400 writes, under Firestore's 500 limit)
+  addQuestions: async items => {
+    for (let i = 0; i < items.length; i += 200) {
+      const b = writeBatch(fdb);
+      for (const { doc: q, correct } of items.slice(i, i + 200)) {
+        const r = doc(collection(fdb, "questions"));
+        b.set(r, q); b.set(doc(fdb, "answers/" + r.id), { correct });
+      }
+      await b.commit();
+    }
+  },
   deleteQuestion: id => {
     const b = writeBatch(fdb);
     b.delete(doc(fdb, "questions/" + id)); b.delete(doc(fdb, "answers/" + id));
