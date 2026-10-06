@@ -149,6 +149,14 @@ describe("new player registration", () => {
   test("must use the server time", () => deny(register("p2", fresh({ srvAt: Timestamp.now() }))));
   test("cannot register a nickname already taken", () => deny(register("p2", fresh({ nick: "Champ", nickLower: "champ" }))));
   test("cannot create a score for someone else", () => deny(setDoc(doc(ctx("p2"), "scores/p3"), fresh())));
+  // Google sign-in creates the profile in one batch: nickname from the Google name, contact without a phone
+  test("Google sign-in: profile, nickname and contact in one step", () => {
+    const f = ctx("p2"), b = writeBatch(f);
+    b.set(doc(f, "scores/p2"), fresh({ nick: "Аҳмад_Азимов", nickLower: "аҳмад_азимов" }));
+    b.set(doc(f, "nicks/аҳмад_азимов"), { uid: "p2" });
+    b.set(doc(f, "contacts/p2"), { name: "Аҳмад Азимов", email: "a@gmail.com", agreedAt: NOW, createdAt: NOW, updatedAt: NOW });
+    return allow(b.commit());
+  });
 });
 
 describe("nickname reservations", () => {
