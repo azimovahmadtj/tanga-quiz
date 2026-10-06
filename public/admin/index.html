@@ -1288,13 +1288,17 @@ function aSettings(){
    ${(()=>{const n=S.questions.filter(q=>q.pubAns).length;return `<div class="acard"><h2 style="margin-bottom:8px">🔒 ${esc(at("ansH"))}</h2>
      <p class="note" style="margin:0 0 12px">${esc(n?at("ansOpen").replace("{n}",n):at("ansOk"))}</p>${n?`<button class="btn" id="hideAns">${esc(at("ansBtn"))}</button>`:""}</div>`})()}
    ${(()=>{const n=qCount("cartoon");return `<div class="acard"><h2 style="margin-bottom:8px">🎨 ${esc(t("cartoon"))}</h2>
-     <p class="note" style="margin:0 0 12px">${esc(n?at("cartHave").replace("{n}",n):at("cartNone"))}</p><button class="btn" id="impCart">${esc(at(n?"cartAgain":"cartBtn"))}</button></div>`})()}
+     <p class="note" style="margin:0 0 12px">${esc(n?at("cartHave").replace("{n}",n):at("cartNone"))}</p>${S.cartErr?`<p class="note" style="margin:0 0 12px;color:var(--red)">${esc(S.cartErr)}</p>`:""}<button class="btn" id="impCart">${esc(at(n?"cartAgain":"cartBtn"))}</button></div>`})()}
    <div class="acard"><button class="btn" id="asSite">${esc(at("toSite"))}</button></div></div>`}
 
 // The 9 cartoon questions are added automatically the first time the admin opens the panel without them
 let cartTried=false;
-async function autoCartoons(){if(cartTried||qCount("cartoon"))return;cartTried=true;
-  try{const r=await FB.call("importCartoons",{});if(r?.added)toast(`${at("cartDone")}: ${r.added}`)}catch(x){toast(authErr(x))}}
+function autoCartoons(){if(cartTried||qCount("cartoon"))return;cartTried=true;importCart()}
+// Errors stay on the Settings card (with the server's code) so they can be read and reported
+async function importCart(){S.cartErr="";
+  try{const r=await FB.call("importCartoons",{});toast(`${at("cartDone")}: ${r.added}`)}
+  catch(x){S.cartErr=`${t("err")} [${x?.code||"?"}] ${x?.message||""} · API: ${FB.api||"Cloud Functions"}`;toast(S.cartErr)}
+  if(A.view==="asettings")renderAdm(true);else admSoft()}
 function topicThumbA(x){return IMG[x.id]?`<span class="th" style="background-image:url('${IMG[x.id]}')"></span>`:`<span class="th" style="background:${x.color?`linear-gradient(135deg,${x.color},#1B1A22)`:"linear-gradient(135deg,#5B6CF0,#8E5CE6)"};display:grid;place-items:center;color:#fff;font:800 18px Alegreya,serif">${x.id==="english"?"ABC":esc(topicName(x.id).charAt(0))}</span>`}
 function evList(ev){return ev.length?`<ul class="rl">${ev.map(e=>`<li><span class="ev" style="background:${e.bg}">${e.ic}</span><div class="ti"><b style="font-weight:500">${esc(at(e.k))}</b><span>${esc(e.d)}</span></div><span class="ago">${esc(ago(e.t))}</span></li>`).join("")}</ul>`:`<p class="note">${esc(at("noEv"))}</p>`}
 
@@ -1428,7 +1432,7 @@ function bindAdmBody(){const b=$("abody");
   if($("asSite"))$("asSite").onclick=closeAdmin;
   if($("rulesForm"))$("rulesForm").onsubmit=saveRules;
   if($("hideAns"))$("hideAns").onclick=e=>hideAnswers(e.target);
-  if($("impCart"))$("impCart").onclick=async e=>{e.target.disabled=true;try{const r=await FB.call("importCartoons",{});toast(`${at("cartDone")}: ${r.added}`)}catch(x){e.target.disabled=false;toast(authErr(x))}};
+  if($("impCart"))$("impCart").onclick=e=>{e.target.disabled=true;importCart()};
   if($("aRange")){$("aRange").onchange=e=>{A.range=+e.target.value;renderAdm(true)};bindChart(A.range)}
   if($("uS"))$("uS").oninput=e=>{A.uSearch=e.target.value;const pos=e.target.selectionStart;renderAdm(true);const n=$("uS");n.focus();n.setSelectionRange(pos,pos)};
   if($("qF"))$("qF").onchange=e=>{A.qFilter=e.target.value;paintAQList()};

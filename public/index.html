@@ -926,9 +926,9 @@ const SI={
  out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4h4v16h-4M10 16l-4-4 4-4M6 12h11"/></svg>',
  palette:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.5-.8 1.5-1.5 0-1.2-1-1.5-1-2.5s.9-1.5 2-1.5h2a4.5 4.5 0 0 0 4.5-4.5C21 6.5 17 3 12 3Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg>'};
 const ST={
- tj:{stLangH:"Забон ва минтақа",stLangT:"Забони интерфейс ва минтақаи худро интихоб кунед.",region:"Минтақаи ҷойгир",noRegion:"— Интихоб кунед —",regionSaved:"Минтақа нигоҳ дошта шуд",stProfT:"Маълумоти асосии профили худро пур кунед.",stPhotoT:"Сурати худро бор кунед (JPG, PNG, то 5MB)",stAccT:"Идоракунии ҳисоби худ.",photoBig:"Сурат аз 5MB калон аст",inCountry:"Дар",inWorld:"Дар ҷаҳон",tests:"Тестҳо",motto:"Таърихро омӯз. Донишатро санҷ. Ғолиб шав."},
- ru:{stLangH:"Язык и регион",stLangT:"Выберите язык интерфейса и свой регион.",region:"Регион",noRegion:"— Выберите —",regionSaved:"Регион сохранён",stProfT:"Заполните основные данные профиля.",stPhotoT:"Загрузите фото (JPG, PNG, до 5MB)",stAccT:"Управление аккаунтом.",photoBig:"Фото больше 5MB",inCountry:"В стране:",inWorld:"В мире",tests:"Тесты",motto:"Изучай историю. Проверяй знания. Побеждай."},
- en:{stLangH:"Language & region",stLangT:"Choose the interface language and your region.",region:"Region",noRegion:"— Choose —",regionSaved:"Region saved",stProfT:"Fill in your main profile details.",stPhotoT:"Upload a photo (JPG, PNG, up to 5MB)",stAccT:"Manage your account.",photoBig:"The photo is larger than 5MB",inCountry:"In",inWorld:"Worldwide",tests:"Tests",motto:"Learn history. Test your knowledge. Win."}};
+ tj:{stLangH:"Забон ва минтақа",stLangT:"Забони интерфейс ва минтақаи худро интихоб кунед.",region:"Минтақаи ҷойгир",noRegion:"— Интихоб кунед —",regionSaved:"Минтақа нигоҳ дошта шуд",stProfT:"Маълумоти асосии профили худро пур кунед.",stPhotoT:"Сурати худро бор кунед (JPG, PNG, то 5MB)",stAccT:"Идоракунии ҳисоби худ.",photoBig:"Сурат аз 40MB калон аст",photoFmt:"Ин суратро кушода натавонистем. Сурати JPG ё PNG интихоб кунед",inCountry:"Дар",inWorld:"Дар ҷаҳон",tests:"Тестҳо",motto:"Таърихро омӯз. Донишатро санҷ. Ғолиб шав."},
+ ru:{stLangH:"Язык и регион",stLangT:"Выберите язык интерфейса и свой регион.",region:"Регион",noRegion:"— Выберите —",regionSaved:"Регион сохранён",stProfT:"Заполните основные данные профиля.",stPhotoT:"Загрузите фото (JPG, PNG, до 5MB)",stAccT:"Управление аккаунтом.",photoBig:"Фото больше 40MB",photoFmt:"Не удалось открыть это фото. Выберите JPG или PNG",inCountry:"В стране:",inWorld:"В мире",tests:"Тесты",motto:"Изучай историю. Проверяй знания. Побеждай."},
+ en:{stLangH:"Language & region",stLangT:"Choose the interface language and your region.",region:"Region",noRegion:"— Choose —",regionSaved:"Region saved",stProfT:"Fill in your main profile details.",stPhotoT:"Upload a photo (JPG, PNG, up to 5MB)",stAccT:"Manage your account.",photoBig:"The photo is larger than 40MB",photoFmt:"Couldn’t open this photo. Choose a JPG or PNG",inCountry:"In",inWorld:"Worldwide",tests:"Tests",motto:"Learn history. Test your knowledge. Win."}};
 for(const l of LANGS)Object.assign(T[l],ST[l]);
 const stCard=(ic,h,p,body)=>`<section class="st-card"><div class="st-hd"><span class="ic">${SI[ic]}</span><div><h2>${esc(h)}</h2>${p?`<p>${esc(p)}</p>`:""}</div></div>${body}</section>`;
 /* ---------- installable app (PWA) ---------- */
@@ -954,7 +954,7 @@ function renderSettings(){
     :reg?stCard("user",t("tabProfile"),t("stProfT"),profileForm(false)):stCard("user",t("tabProfile"),"",`<button class="st-btn pri" id="openAuth">${esc(t("aTitle"))}</button>`);
   $("view").innerHTML=`<h1 class="pagehead">${esc(t("settings"))}</h1><div class="st">${langCard}${installCard()}${prof}
    ${reg?stCard("image",t("photo"),t("stPhotoT"),`<div class="st-photo"><span class="ava" id="photoPrev">${avaInner()}</span><div class="st-btns">
-     <label class="st-btn pri" style="cursor:pointer">${SI.upload}${esc(t("changePhoto"))}<input type="file" accept="image/jpeg,image/png,image/webp" id="photoIn" hidden></label>
+     <label class="st-btn pri" style="cursor:pointer">${SI.upload}${esc(t("changePhoto"))}<input type="file" accept="image/*" id="photoIn" hidden></label>
      ${S.me.avatar?`<button class="st-btn red" id="photoDel">${SI.trash}${esc(t("removePhoto"))}</button>`:""}</div></div>`)
     +stCard("shield",t("account"),t("stAccT"),`<div class="st-btns"><button class="st-btn" id="logoutBtn">${SI.out}${esc(t("logout"))}</button><button class="st-btn red" id="delBtn">${SI.trash}${esc(t("deleteAcc"))}</button></div>`):""}
    </div>`;
@@ -967,16 +967,22 @@ function renderSettings(){
   if($("photoDel"))$("photoDel").onclick=async()=>{S.me.avatar="";await saveProfile({avatar:""}).catch(()=>{});toast(t("photoSaved"));renderSettings();paintChrome()};
   if($("logoutBtn"))$("logoutBtn").onclick=async()=>{await FB.signOut();toast(t("loggedOut"))};
   if($("delBtn"))$("delBtn").onclick=confirmDelete}
-async function onPhoto(e){const f=e.target.files?.[0];if(!f)return;
-  if(!f.type.startsWith("image/"))return toast(t("photoBad"));
-  if(f.size>5*1024*1024)return toast(t("photoBig"));
-  try{const url=URL.createObjectURL(f);const img=new Image();
-    await new Promise((ok,no)=>{img.onload=ok;img.onerror=no;img.src=url});
-    const n=160,c=document.createElement("canvas");c.width=c.height=n;const x=c.getContext("2d");
-    const m=Math.min(img.naturalWidth,img.naturalHeight);
-    x.drawImage(img,(img.naturalWidth-m)/2,(img.naturalHeight-m)/2,m,m,0,0,n,n);URL.revokeObjectURL(url);
-    S.me.avatar=c.toDataURL("image/jpeg",.82);await saveProfile({avatar:S.me.avatar});toast(t("photoSaved"));render();
-  }catch(x){toast(t("photoBad"))}}
+async function onPhoto(e){const f=e.target.files?.[0];e.target.value="";if(!f)return;
+  if(f.type&&!f.type.startsWith("image/"))return toast(t("photoBad"));
+  if(f.size>40*1024*1024)return toast(t("photoBig"));
+  // Phone photos are often 5–15 MB: the picture is shrunk to 160×160 here, so only this small copy is saved
+  let img,url;
+  try{img=await createImageBitmap(f)}catch(_){
+    try{url=URL.createObjectURL(f);img=new Image();await new Promise((ok,no)=>{img.onload=ok;img.onerror=no;img.src=url})}
+    catch(x){if(url)URL.revokeObjectURL(url);return toast(t("photoFmt"))}}
+  const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,n=160,c=document.createElement("canvas");c.width=c.height=n;
+  const m=Math.min(w,h),x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,n,n);
+  x.drawImage(img,(w-m)/2,(h-m)/2,m,m,0,0,n,n);if(url)URL.revokeObjectURL(url);img.close?.();
+  let data="";for(const q of [.82,.7,.55,.4]){data=c.toDataURL("image/jpeg",q);if(data.length<=38000)break}
+  if(!data.startsWith("data:image/jpeg")||data.length>38000)return toast(t("photoFmt"));
+  const old=S.me.avatar;S.me.avatar=data;
+  try{await saveProfile({avatar:data});toast(t("photoSaved"))}catch(x){S.me.avatar=old}
+  render()}
 function confirmDelete(){const d=$("terms");
   d.innerHTML=`<h2>${esc(t("delTitle"))}</h2><p>${esc(t("delText"))}</p>
    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px"><button class="btn ghost" id="dNo">${esc(t("cancel"))}</button><button class="btn" style="background:var(--red)" id="dYes">${esc(t("delConfirm"))}</button></div>`;

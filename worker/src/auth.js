@@ -56,7 +56,7 @@ export async function serviceAccountToken(saJson, now = Date.now()) {
   const r = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=" + head + "." + body + "." + sig });
   const j = await r.json();
-  if (!r.ok || !j.access_token) throw new Error("service account login failed");
+  if (!r.ok || !j.access_token) throw new Error("service account login failed: " + (j.error_description || j.error || r.status));
   saCache = { token: j.access_token, until: now + (j.expires_in - 120) * 1000 };
   return saCache.token;
 }

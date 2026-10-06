@@ -44,6 +44,7 @@ function C(path, cons = []) {
 
 window.FB = {
   db: { doc: D, collection: C },
+  api: apiUrl,
   onAuth: cb => onAuthStateChanged(auth, cb),
   signUp: (email, pass) => createUserWithEmailAndPassword(auth, email, pass),
   signIn: (email, pass) => signInWithEmailAndPassword(auth, email, pass),

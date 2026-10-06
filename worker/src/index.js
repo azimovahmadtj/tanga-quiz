@@ -94,7 +94,8 @@ export async function handle(req, env, now = Date.now()) {
   catch (e) {
     if (e instanceof GameError) return fail(e.code, e.message, cors);
     console.error(e);
-    return fail("internal", "server error", cors);
+    // The reason (e.g. a bad SERVICE_ACCOUNT secret or a Firestore error) helps the admin fix the setup; it holds no secrets
+    return fail("internal", "server error: " + String(e?.message || e).slice(0, 300), cors);
   }
 }
 
