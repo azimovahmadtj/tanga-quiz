@@ -552,7 +552,7 @@ function period(){return (CFG.base||0)+Math.floor((Date.now()-CFG.epoch)/(CFG.ro
 function roundStart(){return CFG.epoch+(period()-(CFG.base||0))*CFG.roundDays*864e5}
 function daysLeft(){const end=roundStart()+CFG.roundDays*864e5;return Math.max(1,Math.ceil((end-Date.now())/864e5))}
 // Game rules edited in the admin panel (config/rules); invalid or missing values keep the defaults above
-const RULE_LIMITS={seconds:[5,300],coinsPerRight:[1,1000],dailyLimit:[1,1000],roundDays:[1,365]};
+const RULE_LIMITS={seconds:[5,300],coinsPerRight:[1,1000],dailyLimit:[1,1000],roundDays:[1,365],coinsPerSomoni:[1,100000]};
 function applyRules(d){if(!d)return;
   for(const k in RULE_LIMITS){const v=+d[k],[lo,hi]=RULE_LIMITS[k];if(Number.isInteger(v)&&v>=lo&&v<=hi)CFG[k]=v}
   if(Number.isFinite(+d.epoch)&&d.epoch)CFG.epoch=+d.epoch;if(Number.isInteger(+d.base))CFG.base=+d.base}
@@ -724,7 +724,7 @@ function nextQ(){
 }
 function renderQuestion(){
   const g=S.game;if(!g?.cur)return renderHome();const q=g.cur;
-  const opts=q.opts?.[lang]||q.opts?.tj||q.opts?.ru||q.opts?.en||[];
+  const opts=(q.opts?.[lang]||q.opts?.tj||q.opts?.ru||q.opts?.en||[]).map(o=>String(o).replace(/\s*[*＊∗✱★]+\s*$/u,"").replace(/^\s*[*＊∗✱★]+\s*/u,""));
   $("view").innerHTML=`<div class="card" style="max-width:760px">
    <div class="qhead"><span>${esc(topicName(g.topic))} · +${g.bonus||CFG.coinsPerRight} ${esc(t("coins"))}</span><span><span id="secs">${g.remain}</span> ${esc(t("sec"))}</span></div>
    <div class="timer${g.remain<=5?" low":""}"><i style="width:${g.remain/CFG.seconds*100}%"></i></div>

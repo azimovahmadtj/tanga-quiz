@@ -15,7 +15,7 @@
         "headers": [
           {
             "key": "Content-Security-Policy",
-            "value": "default-src 'self'; script-src 'self' 'sha256-IoPaFW4Alipkl4LkRXvF7kzvzTyPkVkD0F/yd+wnesM=' 'sha256-JfmGy1En+8nHSgdTzjQW/8p3ZPa2Z/4e02bYyj3S5fA=' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://europe-west1-tanga-quiz.cloudfunctions.net https://*.workers.dev https://apis.google.com https://www.google.com/recaptcha/; frame-src https://tanga-quiz.firebaseapp.com https://accounts.google.com https://www.google.com/recaptcha/; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+            "value": "default-src 'self'; script-src 'self' 'sha256-e5gdSw09IzPXUXoMzLaWrapKDxGVTnVpKOp/UNJM1zQ=' 'sha256-j8F2vzwXk6LN9NiXY+E+Dfvda1b1EiRPuN8zhzAtHB4=' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://europe-west1-tanga-quiz.cloudfunctions.net https://*.workers.dev https://apis.google.com https://www.google.com/recaptcha/; frame-src https://tanga-quiz.firebaseapp.com https://accounts.google.com https://www.google.com/recaptcha/; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
           },
           {
             "key": "X-Content-Type-Options",
