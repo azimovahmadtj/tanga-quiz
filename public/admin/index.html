@@ -448,8 +448,8 @@ let TOPICS=[
  {id:"medieval",grp:"history",tint:"var(--blue-soft)",acc:"var(--blue)"},
  {id:"tajik",grp:"history",tint:"var(--green-soft)",acc:"var(--green)"},
  {id:"modern",grp:"history",tint:"var(--violet-soft)",acc:"var(--violet)"},
- {id:"english",grp:"english",tint:"var(--violet-soft)",acc:"var(--violet)"},
- {id:"cartoon",grp:"cartoon",tint:"rgba(240,122,18,.16)",acc:"var(--orange)"}];
+ {id:"cartoon",grp:"history",tint:"rgba(240,122,18,.16)",acc:"var(--orange)"},
+ {id:"english",grp:"english",tint:"var(--violet-soft)",acc:"var(--violet)"}];
 const BASE_TOPICS=TOPICS.slice();
 const T={
  tj:{cartoon:"Карикатура",cartoonT:"Карикатураҳо ва плакатҳои таърихӣ: паёми расмро фаҳмед ва ҷавоби дурустро интихоб кунед.",cartoonStart:"Оғоз кардан",tabProfile:"Профил",pass:"Рамз",pass2:"Тасдиқи рамз",passShort:"Рамз бояд ақаллан 6 аломат бошад",passMismatch:"Рамзҳо мувофиқ нестанд",google:"Бо Google ворид шудан",or:"ё",noAcc:"Ҳисоб надоред?",toRegister:"Бақайдгирӣ",forgot:"Рамзро фаромӯш кардед?",resetSent:"Агар ин почта бо рамз сабт шуда бошад, дар чанд дақиқа нома меояд — папкаи «Спам»-ро ҳам санҷед. Агар бо Google сабт шуда бошед, тугмаи «Бо Google ворид шудан»-ро пахш кунед.",needEmail:"Аввал почтаро нависед",badLogin:"Почта ё рамз нодуруст аст",emailUsed:"Ин почта аллакай сабт шудааст. «Даромадан»-ро пахш кунед",tooMany:"Кӯшишҳо зиёд шуданд. Каме интизор шавед",reauth:"Барои нест кардани ҳисоб аз нав ворид шавед ва боз кӯшиш кунед",signedAs:"Шумо ворид шудед:",netErr:"Хатои шабака. Интернетро санҷед",quizzesH:"Викторинаҳои фаъол",qzStart:"Оғоз",qzCont:"Идома",qzDone:"Анҷом шуд",qzEnds:"То анҷом",qzPer:"танга барои ҷавоби дуруст",qzOver:"Викторина анҷом ёфт",qzOverT:"Шумо ба ҳамаи саволҳои ин викторина ҷавоб додед.",qzClosed:"Ин викторина дигар фаъол нест",hrs:"соат",adminBtn:"Панели админ",denied:"Ин саҳифа танҳо барои маъмур аст",photo:"Сурати профил",changePhoto:"Сурат интихоб кардан",removePhoto:"Суратро нест кардан",photoSaved:"Сурат нигоҳ дошта шуд",photoBad:"Файли тасвирро интихоб кунед",account:"Ҳисоб",logout:"Баромадан",deleteAcc:"Ҳисобро нест кардан",delTitle:"Ҳисобро нест мекунед?",delText:"Профил, тангаҳо, пешрафт ва маълумоти тамоси шумо пурра нест карда мешаванд. Инро баргардонда намешавад.",delConfirm:"Бале, нест кунед",cancel:"Бекор кардан",deletedAcc:"Ҳисоби шумо нест карда шуд",loginH:"Даромадан",loginSub:"Хуш омадед! Барои идома ба ҳисоби худ ворид шавед.",loginAs:"Даромадан",loggedOut:"Шумо аз сайт баромадед",otherAcc:"Барои даромадан бо ҳисоби дигар, аввал аз ҳисоби Claude бароед.",aTitle:"Бақайдгирӣ",aSub:"Ҳисоби нав эҷод кунед ва таърихро омӯхтан оғоз намоед!",aLead:"Омӯзиш, саволҳо, тестҳо ва мукофотҳо дар як ҷо. Таърихро осон, шавқовар ва интерактивӣ омӯзед.",
@@ -607,7 +607,7 @@ function paintChrome(){
   document.documentElement.lang=lang==="tj"?"tg":lang;
   document.querySelectorAll("[data-i]").forEach(el=>el.textContent=t(el.dataset.i));
   document.querySelectorAll("[data-lang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lang===lang));
-  const cur=S.view==="play"?(S.game?.quiz?"home":S.game?.topic==="english"?"english":S.game?.topic==="cartoon"?"cartoon":"history"):S.view;
+  const cur=S.view==="play"?(S.game?.quiz?"home":S.game?.topic==="english"?"english":"history"):S.view;
   $("menu").innerHTML=NAV.filter(v=>v!=="admin"||S.admin).map(v=>`<button data-v="${v}" ${v===cur?'aria-current="page"':""}>${ICON[v]}<span>${esc(t(v==="english"?"englishNav":v))}</span></button>`).join("");
   $("menu").querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>go(b.dataset.v));
   $("q").placeholder=t("search");
@@ -1291,6 +1291,10 @@ function aSettings(){
      <p class="note" style="margin:0 0 12px">${esc(n?at("cartHave").replace("{n}",n):at("cartNone"))}</p><button class="btn" id="impCart">${esc(at(n?"cartAgain":"cartBtn"))}</button></div>`})()}
    <div class="acard"><button class="btn" id="asSite">${esc(at("toSite"))}</button></div></div>`}
 
+// The 9 cartoon questions are added automatically the first time the admin opens the panel without them
+let cartTried=false;
+async function autoCartoons(){if(cartTried||qCount("cartoon"))return;cartTried=true;
+  try{const r=await FB.call("importCartoons",{});if(r?.added)toast(`${at("cartDone")}: ${r.added}`)}catch(x){toast(authErr(x))}}
 function topicThumbA(x){return IMG[x.id]?`<span class="th" style="background-image:url('${IMG[x.id]}')"></span>`:`<span class="th" style="background:${x.color?`linear-gradient(135deg,${x.color},#1B1A22)`:"linear-gradient(135deg,#5B6CF0,#8E5CE6)"};display:grid;place-items:center;color:#fff;font:800 18px Alegreya,serif">${x.id==="english"?"ABC":esc(topicName(x.id).charAt(0))}</span>`}
 function evList(ev){return ev.length?`<ul class="rl">${ev.map(e=>`<li><span class="ev" style="background:${e.bg}">${e.ic}</span><div class="ti"><b style="font-weight:500">${esc(at(e.k))}</b><span>${esc(e.d)}</span></div><span class="ago">${esc(ago(e.t))}</span></li>`).join("")}</ul>`:`<p class="note">${esc(at("noEv"))}</p>`}
 
@@ -1487,7 +1491,7 @@ function showALogin(msg){document.body.classList.add("adminmode");$("adm").hidde
     S.uid=u.uid;S.admin=true;S.me={nick:(u.email||"admin").split("@")[0]};
     $("alog").hidden=true;
     if(!started){started=true;
-      db.collection("questions").onSnapshot(s=>{S.questions=s.docs.map(d=>{const x={id:d.id,...d.data()};if(x.topic==="history")x.topic="tajik";if("correct" in x)x.pubAns=true;return x});mergeAns();admSoft()},()=>{});
+      db.collection("questions").onSnapshot(s=>{S.questions=s.docs.map(d=>{const x={id:d.id,...d.data()};if(x.topic==="history")x.topic="tajik";if("correct" in x)x.pubAns=true;return x});mergeAns();admSoft();autoCartoons()},()=>{});
       db.collection("answers").onSnapshot(s=>{A.ans={};s.docs.forEach(d=>A.ans[d.id]=d.data().correct);mergeAns();admSoft()},()=>{});
       db.collection("quizzes").onSnapshot(s=>{S.quizzes=s.docs.map(d=>({id:d.id,...d.data()}));admSoft()},()=>{});
       db.doc("config/topics").onSnapshot(s=>{applyCustom(s.exists?s.data().list:[]);admSoft()},()=>{});

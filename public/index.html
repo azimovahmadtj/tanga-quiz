@@ -430,8 +430,8 @@ let TOPICS=[
  {id:"medieval",grp:"history",tint:"var(--blue-soft)",acc:"var(--blue)"},
  {id:"tajik",grp:"history",tint:"var(--green-soft)",acc:"var(--green)"},
  {id:"modern",grp:"history",tint:"var(--violet-soft)",acc:"var(--violet)"},
- {id:"english",grp:"english",tint:"var(--violet-soft)",acc:"var(--violet)"},
- {id:"cartoon",grp:"cartoon",tint:"rgba(240,122,18,.16)",acc:"var(--orange)"}];
+ {id:"cartoon",grp:"history",tint:"rgba(240,122,18,.16)",acc:"var(--orange)"},
+ {id:"english",grp:"english",tint:"var(--violet-soft)",acc:"var(--violet)"}];
 const BASE_TOPICS=TOPICS.slice();
 const T={
  tj:{cartoon:"Карикатура",cartoonT:"Карикатураҳо ва плакатҳои таърихӣ: паёми расмро фаҳмед ва ҷавоби дурустро интихоб кунед.",cartoonStart:"Оғоз кардан",installH:"Барномаи мобилӣ",installT:"Тангаро ҳамчун барнома ба экрани асосии телефон илова кунед.",installBtn:"Насб кардан",installIos:"Дар iPhone: тугмаи «Мубодила» ⬆️ → «Ба экрани асосӣ» (На экран «Домой»).",installDone:"Барнома насб шудааст",tabProfile:"Профил",pass:"Рамз",pass2:"Тасдиқи рамз",passShort:"Рамз бояд ақаллан 6 аломат бошад",passMismatch:"Рамзҳо мувофиқ нестанд",google:"Бо Google ворид шудан",or:"ё",noAcc:"Ҳисоб надоред?",toRegister:"Бақайдгирӣ",forgot:"Рамзро фаромӯш кардед?",resetSent:"Агар ин почта бо рамз сабт шуда бошад, дар чанд дақиқа нома меояд — папкаи «Спам»-ро ҳам санҷед. Агар бо Google сабт шуда бошед, тугмаи «Бо Google ворид шудан»-ро пахш кунед.",needEmail:"Аввал почтаро нависед",badLogin:"Почта ё рамз нодуруст аст",emailUsed:"Ин почта аллакай сабт шудааст. «Даромадан»-ро пахш кунед",tooMany:"Кӯшишҳо зиёд шуданд. Каме интизор шавед",reauth:"Барои нест кардани ҳисоб аз нав ворид шавед ва боз кӯшиш кунед",signedAs:"Шумо ворид шудед:",netErr:"Хатои шабака. Интернетро санҷед",quizzesH:"Викторинаҳои фаъол",qzStart:"Оғоз",qzCont:"Идома",qzDone:"Анҷом шуд",qzEnds:"То анҷом",qzPer:"танга барои ҷавоби дуруст",qzOver:"Викторина анҷом ёфт",qzOverT:"Шумо ба ҳамаи саволҳои ин викторина ҷавоб додед.",qzClosed:"Ин викторина дигар фаъол нест",hrs:"соат",adminBtn:"Панели админ",denied:"Ин саҳифа танҳо барои маъмур аст",photo:"Сурати профил",changePhoto:"Сурат интихоб кардан",removePhoto:"Суратро нест кардан",photoSaved:"Сурат нигоҳ дошта шуд",photoBad:"Файли тасвирро интихоб кунед",account:"Ҳисоб",logout:"Баромадан",deleteAcc:"Ҳисобро нест кардан",delTitle:"Ҳисобро нест мекунед?",delText:"Профил, тангаҳо, пешрафт ва маълумоти тамоси шумо пурра нест карда мешаванд. Инро баргардонда намешавад.",delConfirm:"Бале, нест кунед",cancel:"Бекор кардан",deletedAcc:"Ҳисоби шумо нест карда шуд",loginH:"Даромадан",loginSub:"Хуш омадед! Барои идома ба ҳисоби худ ворид шавед.",loginAs:"Даромадан",loggedOut:"Шумо аз сайт баромадед",otherAcc:"Барои даромадан бо ҳисоби дигар, аввал аз ҳисоби Claude бароед.",aTitle:"Бақайдгирӣ",aSub:"Ҳисоби нав эҷод кунед ва таърихро омӯхтан оғоз намоед!",aLead:"Омӯзиш, саволҳо, тестҳо ва мукофотҳо дар як ҷо. Таърихро осон, шавқовар ва интерактивӣ омӯзед.",
@@ -588,12 +588,12 @@ function initial(){return (S.me?.nick||"?").trim().charAt(0).toUpperCase()}
 function thumb(id){return IMG[id]?`style="background-image:url('${IMG[id]}')"`:""}
 
 /* ---------- chrome ---------- */
-const NAV=["home","history","english","cartoon","board","profile","mine","settings"];
+const NAV=["home","history","english","board","profile","mine","settings"];
 function paintChrome(){
   document.documentElement.lang=lang==="tj"?"tg":lang;
   document.querySelectorAll("[data-i]").forEach(el=>el.textContent=t(el.dataset.i));
   document.querySelectorAll("[data-lang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lang===lang));
-  const cur=S.view==="play"?(S.game?.quiz?"home":S.game?.topic==="english"?"english":S.game?.topic==="cartoon"?"cartoon":"history"):S.view;
+  const cur=S.view==="play"?(S.game?.quiz?"home":S.game?.topic==="english"?"english":"history"):S.view;
   $("menu").innerHTML=NAV.filter(v=>v!=="admin"||S.admin).map(v=>`<button data-v="${v}" ${v===cur?'aria-current="page"':""}>${ICON[v]}<span>${esc(t(v==="english"?"englishNav":v))}</span></button>`).join("");
   $("menu").querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>go(b.dataset.v));
   $("q").placeholder=t("search");
@@ -604,7 +604,7 @@ function go(v){if(S.game){clearInterval(S.game.tick);S.game=null}S.view=v;render
 function render(){paintChrome();
   const v=S.view;
   if(S.error&&v!=="settings"){$("view").innerHTML=`<div class="card empty"><h3>${esc(t("offline"))}</h3></div>`;return}
-  ({home:renderHome,history:renderHistory,english:renderEnglish,board:renderBoard,progress:renderProgress,profile:renderProfile,cartoon:renderCartoon,mine:renderMine,settings:renderSettings,
+  ({home:renderHome,history:renderHistory,english:renderEnglish,board:renderBoard,progress:renderProgress,profile:renderProfile,mine:renderMine,settings:renderSettings,
     play:renderQuestion,login:()=>{showAuth();renderHome()},register:()=>{showAuth();renderHome()}}[v]||renderHome)();
 }
 
@@ -691,11 +691,6 @@ function startQuiz(id){
 function bindGo(){$("view").querySelectorAll("[data-quiz]").forEach(b=>b.onclick=()=>startQuiz(b.dataset.quiz));$("view").querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go))}
 function renderHistory(){
   $("view").innerHTML=`<h1 class="pagehead">${esc(t("histTopics"))}</h1><div class="tcards">${TOPICS.filter(x=>x.grp==="history").map(topicCard).join("")}</div>`;bindStarts()}
-function renderCartoon(){const n=qCount("cartoon");
-  $("view").innerHTML=`<h1 class="pagehead">${esc(t("cartoon"))}</h1>
-   <section class="cart-hero"><img src="${IMG.cartoon}" alt=""><div><p>${esc(t("cartoonT"))}</p><small>${n} ${esc(t("qn"))}</small><br>
-    ${n?`<button class="btn" data-start="cartoon">${esc(t("cartoonStart"))} →</button>`:""}</div></section>
-   <div class="tcards" style="margin-top:18px">${TOPICS.filter(x=>x.grp==="cartoon").map(topicCard).join("")}</div>`;bindStarts()}
 function renderEnglish(){
   $("view").innerHTML=`<h1 class="pagehead">${esc(t("english"))}</h1><div class="tcards">${TOPICS.filter(x=>x.grp==="english").map(topicCard).join("")}</div>`;bindStarts()}
 
