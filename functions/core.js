@@ -66,20 +66,26 @@ function applyAnswer({ score, lastMs, question, answer, rules, quiz, entry, qid,
   const m = normalize(score, periodOf(c, now), dayKey(now));
   if (now - (lastMs || 0) < MIN_GAP_MS) throw new GameError("resource-exhausted", "too fast");
 
-  let gain, topic;
+  let gain, topic, entryOut = null, hide = false;
   if (quizId) {
     if (!quiz) throw new GameError("not-found", "no such quiz");
     const z = quiz;
     if (!(now >= z.start && now <= z.end)) throw new GameError("failed-precondition", "quiz is not active");
     if (!list(z.qids).includes(qid)) throw new GameError("invalid-argument", "question is not in this quiz");
-    if (Number(z.entryFee) > 0 && !(entry && entry.paid === true)) throw new GameError("failed-precondition", "entry fee not paid");
-    const done = list(m.quizDone[quizId]);
+    const paid = Number(z.entryFee) > 0;
+    if (paid && !(entry && entry.paid === true)) throw new GameError("failed-precondition", "entry fee not paid");
+    // In a paid quiz the progress also lives in the entry, which the player cannot change or delete,
+    // so deleting and re-creating the profile does not allow answering the same questions again
+    const done = [...new Set([...list(m.quizDone[quizId]), ...(paid ? list(entry.done) : [])])];
     if (done.includes(qid)) throw new GameError("already-exists", "already answered");
     m.quizDone[quizId] = [...done, qid];
+    if (paid) { hide = true; entryOut = { done: m.quizDone[quizId], coins: int(entry.coins) }; }
     m.lastQuiz = quizId;
     gain = Number.isInteger(z.bonus) && z.bonus >= 1 && z.bonus <= 1000 ? z.bonus : c.coinsPerRight;
     topic = "quiz:" + quizId;
   } else {
+    // Questions reserved for a quiz are never answered (and so never revealed) in the normal game
+    if (question.quizOnly === true) throw new GameError("failed-precondition", "quiz only");
     if (m.answered.includes(qid)) throw new GameError("already-exists", "already answered");
     if (m.dayCount >= c.dailyLimit) throw new GameError("resource-exhausted", "daily limit");
     m.answered.push(qid);
@@ -94,8 +100,15 @@ function applyAnswer({ score, lastMs, question, answer, rules, quiz, entry, qid,
   if (ok) {
     m.coins += gain; m.dayCoins += gain; m.totalCorrect++;
     // Points in each quiz, for its winners table (prizes go to the top 3)
-    if (quizId) { m.quizCoins[quizId] = int(m.quizCoins[quizId]) + gain; const ks = Object.keys(m.quizCoins); if (ks.length > 150) delete m.quizCoins[ks[0]]; }
+    if (quizId) {
+      if (entryOut) entryOut.coins += gain;
+      m.quizCoins[quizId] = entryOut ? entryOut.coins : int(m.quizCoins[quizId]) + gain;
+      const ks = Object.keys(m.quizCoins); if (ks.length > 150) delete m.quizCoins[ks[0]];
+    }
     m.wrong = m.wrong.filter(x => x !== qid); delete m.wrongAns[qid];
+  } else if (hide) {
+    // Paid quiz: the correct option is not stored in the public score (others could read it)
+    if (entryOut.coins) m.quizCoins[quizId] = entryOut.coins;
   } else {
     m.wrong = [qid, ...m.wrong.filter(x => x !== qid)].slice(0, 60);
     m.wrongAns[qid] = correct;
@@ -111,7 +124,8 @@ function applyAnswer({ score, lastMs, question, answer, rules, quiz, entry, qid,
   else m.activity = [{ topic, right: ok ? 1 : 0, total: 1, t: now }, ...m.activity].slice(0, 8);
   m.updatedAt = now;
   delete m.dayStart; delete m.srvAt;
-  return { m, ok, correct, gain: ok ? gain : 0 };
+  // In a paid quiz the correct option is not revealed, so players cannot pass answers to each other
+  return { m, ok, correct: hide ? null : correct, gain: ok ? gain : 0, entry: entryOut };
 }
 
 // Questions whose correct option is still public: [{ id, correct }]

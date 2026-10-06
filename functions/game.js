@@ -12,10 +12,11 @@ async function submitAnswer(db, uid, data, now = Date.now()) {
       tx.get(db.doc("config/rules")), quizId ? tx.get(db.doc(`quizzes/${quizId}`)) : Promise.resolve(null),
       quizId ? tx.get(db.doc(`entries/${quizId}_${uid}`)) : Promise.resolve(null)]);
     const d = x => (x && x.exists ? x.data() : null);
-    const { m, ok, correct, gain } = applyAnswer({
+    const { m, ok, correct, gain, entry } = applyAnswer({
       score: d(sS), lastMs: d(sS)?.srvAt?.toMillis?.() || 0, question: d(qS), answer: d(aS), rules: d(cS), quiz: d(zS), entry: d(eS),
       qid, choice, quizId, now });
     tx.set(scoreRef, { ...m, srvAt: Timestamp.fromMillis(now) });
+    if (entry) tx.set(db.doc(`entries/${quizId}_${uid}`), entry, { merge: true });
     return { ok, correct, gain, me: m };
   });
 }

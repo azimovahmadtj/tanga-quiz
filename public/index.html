@@ -575,7 +575,7 @@ function qLang(o){return o?.[lang]||o?.tj||o?.ru||o?.en||""}
 function topicName(id){if(String(id).startsWith("quiz:")){const z=(S.quizzes||[]).find(x=>x.id===id.slice(5));return z?qLang(z.title):"🏆"}const c=TOPICS.find(x=>x.id===id);if(c?.name)return c.name[lang]||c.name.tj||id;return t(id)}
 function nameIn(x,l){return x.name?(x.name[l]||""):(T[l][x.id]||"")}
 function applyCustom(list){S.customTopics=list||[];TOPICS=[...BASE_TOPICS,...S.customTopics.map(x=>({id:x.id,grp:x.grp,custom:true,color:x.color,name:x.name,createdAt:x.createdAt,tint:"var(--bg)",acc:x.color}))]}
-function qCount(id){return S.questions.filter(q=>q.topic===id).length}
+function qCount(id){return S.questions.filter(q=>q.topic===id&&!q.quizOnly).length}
 function streak(){const set=new Set(S.me?.days||[]);let n=0,d=new Date();if(!set.has(dayKey(d)))d.setDate(d.getDate()-1);
   while(set.has(dayKey(d))){n++;d.setDate(d.getDate()-1)}return n}
 function myRank(){if(!S.uid)return null;const rows=S.board.filter(r=>r.period===period()&&r.coins>0).sort((a,b)=>b.coins-a.coins);
@@ -747,7 +747,7 @@ function nextQ(){
     g.cur=left[0];
   }else{
   if(dayUsed(m)>=CFG.dailyLimit){S.game=null;S.view="home";paintChrome();return emptyState(t("limit"),t("limitT"))}
-  left=S.questions.filter(q=>q.topic===g.topic&&!m.answered.includes(q.id));
+  left=S.questions.filter(q=>q.topic===g.topic&&!q.quizOnly&&!m.answered.includes(q.id));
   if(!left.length){S.game=null;S.view="home";paintChrome();return emptyState(t("allDone"),t("allDoneT"))}
   g.cur=left[Math.floor(Math.random()*left.length)];}g.done=false;g.picked=null;g.remain=CFG.seconds;
   g.order=[0,1,2,3].sort(()=>Math.random()-.5);
@@ -778,7 +778,8 @@ async function answer(oi){
   const g=S.game;if(!g||g.done||g.sending)return;g.sending=true;g.picked=oi;clearInterval(g.tick);
   document.querySelectorAll("#view [data-o]").forEach(b=>b.disabled=true);
   try{const r=await FB.call("submitAnswer",{qid:g.cur.id,choice:oi,quizId:g.quiz||null});
-    S.me=normMe(r.me);g.cur.correct=r.correct;g.done=true}
+    // A paid quiz does not reveal the correct option: only whether the pick was right
+    S.me=normMe(r.me);g.cur.correct=r.correct??(r.ok?oi:-1);g.done=true}
   catch(e){const c=String(e?.code||"");g.done=true;g.cur.correct=undefined;
     if(/resource-exhausted/.test(c)&&/daily/.test(e?.message||"")){S.game=null;S.view="home";paintChrome();return emptyState(t("limit"),t("limitT"))}
     if(/failed-precondition/.test(c)&&g.quiz){S.game=null;S.view="home";paintChrome();return /fee/.test(e?.message||"")?emptyState(t("qzWait"),t("qzWaitT")):emptyState(t("qzClosed"),"")}

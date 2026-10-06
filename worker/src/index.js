@@ -32,7 +32,9 @@ async function submitAnswer(store, uid, data, now) {
       res = applyAnswer({ score, lastMs: score?.srvAt?.__ts || 0, question, answer, rules, quiz: quiz ?? null, entry: entry ?? null, qid, choice, quizId, now });
     } catch (e) { await store.rollback(tx); throw e; }
     try {
-      await store.commit([store.set(`scores/${uid}`, { ...res.m, srvAt: { __ts: now } })], tx);
+      const writes = [store.set(`scores/${uid}`, { ...res.m, srvAt: { __ts: now } })];
+      if (res.entry) writes.push(store.set(`entries/${quizId}_${uid}`, { ...entry, ...res.entry }));
+      await store.commit(writes, tx);
       return { ok: res.ok, correct: res.correct, gain: res.gain, me: res.m };
     } catch (e) {
       if (e instanceof FirestoreError && (e.status === 409 || e.status === 400 && /transaction/i.test(e.message))) continue;   // lost a race: retry

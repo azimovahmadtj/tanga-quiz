@@ -207,6 +207,18 @@ describe("quiz entries (entry fee)", () => {
     deny(updateDoc(doc(ctx("p1"), "scores/p1"), { quizCoins: { z1: 999 }, updatedAt: NOW, srvAt: serverTimestamp() })));
 });
 
+describe("attacks found in the security audit", () => {
+  beforeEach(seed);
+  const fresh = o => ({ nick: "Newbie", nickLower: "newbie", period: 0, coins: 0, answered: [], day: "2026-01-01", dayCount: 0, dayCoins: 0,
+    totalAnswered: 0, totalCorrect: 0, days: [], activity: [], wrong: [], updatedAt: Date.now(), srvAt: serverTimestamp(), ...o });
+  const register = (uid, data) => { const f = ctx(uid), b = writeBatch(f);
+    b.set(doc(f, `scores/${uid}`), data); b.set(doc(f, `nicks/${data.nickLower}`), { uid }); return b.commit(); };
+  test("cannot register with quiz points (fake prize winner)", () => deny(register("p2", fresh({ quizCoins: { z1: 9999 } }))));
+  test("cannot register with today's coins", () => deny(register("p2", fresh({ dayCoins: 500 }))));
+  test("an entry must carry the player's real nickname", () =>
+    deny(setDoc(doc(ctx("p1"), "entries/z1_p1"), { quizId: "z1", uid: "p1", nick: "Champ", createdAt: NOW, paid: false })));
+});
+
 describe("submitAnswer (server)", () => {
   const T0 = Date.UTC(2026, 9, 5, 8);           // a fixed moment inside round 0 with the default settings
   const P0 = game.periodOf(game.readRules({ roundDays: 14, epoch: Date.UTC(2026, 8, 28) }), T0);
@@ -243,6 +255,27 @@ describe("submitAnswer (server)", () => {
     assert.equal(r.gain, 4); assert.equal(r.me.quizCoins.paid, 4);
     await ask({ qid: "q6", choice: 0, quizId: "paid" }, T0 + 2000);
     assert.equal((await adminDb.doc("scores/u1").get()).data().quizCoins.paid, 4);
+  });
+  test("re-registering does not reopen a paid quiz (replay attack)", async () => {
+    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5", "q6"] });
+    await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: true });
+    await ask({ qid: "q5", choice: 1, quizId: "paid" });
+    await put("scores/u1", { nick: "U", nickLower: "u", period: P0, coins: 0, answered: [], day: game.dayKey(T0), dayCount: 0, totalAnswered: 0, totalCorrect: 0 });
+    await code(ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 2000), "already-exists");
+    const r = await ask({ qid: "q6", choice: 1, quizId: "paid" }, T0 + 4000);
+    assert.equal(r.me.quizCoins.paid, 8);                       // points from before re-registering are kept
+  });
+  test("a paid quiz does not reveal the correct option or store it publicly", async () => {
+    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5"] });
+    await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: true });
+    const r = await ask({ qid: "q5", choice: 3, quizId: "paid" });
+    assert.equal(r.ok, false); assert.equal(r.correct, null);
+    const s = (await adminDb.doc("scores/u1").get()).data();
+    assert.equal(s.wrongAns?.q5, undefined); assert.equal((s.wrong || []).includes("q5"), false);
+  });
+  test("quiz-only questions cannot be answered outside the quiz", async () => {
+    await put("questions/q5", { topic: "tajik", q: { tj: "?" }, opts: { tj: ["a", "b", "c", "d"] }, quizOnly: true });
+    await code(ask({ qid: "q5", choice: 1 }), "failed-precondition");
   });
   test("a paid entry for another quiz does not count", async () => {
     await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5"] });

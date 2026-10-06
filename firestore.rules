@@ -61,7 +61,9 @@ service cloud.firestore {
     // A new player starts from zero
     function freshOk(n) {
       return num(n, 'coins') == 0 && num(n, 'totalAnswered') == 0 && num(n, 'totalCorrect') == 0
-        && num(n, 'dayCount') == 0 && n.srvAt == request.time;
+        && num(n, 'dayCount') == 0 && num(n, 'dayCoins') == 0
+        && n.get('quizCoins', {}).size() == 0          // quiz points (prizes) come only from the server
+        && n.srvAt == request.time;
     }
     // A nickname in scores must be reserved for this player in /nicks
     function ownsNick(uid, d) {
@@ -135,7 +137,8 @@ service cloud.firestore {
                     && id == request.resource.data.quizId + '_' + request.auth.uid
                     && exists(/databases/$(database)/documents/quizzes/$(request.resource.data.quizId))
                     && request.resource.data.paid == false
-                    && request.resource.data.nick is string && request.resource.data.nick.size() <= 20
+                    // the admin sees this nickname when confirming payments, so it must be the player's own
+                    && request.resource.data.nick == get(/databases/$(database)/documents/scores/$(request.auth.uid)).data.nick
                     && request.resource.data.createdAt is int;
       allow update: if isAdmin();
       allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.paid == false);
