@@ -64,7 +64,8 @@ window.FB = {
     if (!apiUrl) return httpsCallable(fns, name)(data).then(r => r.data);
     const token = await auth.currentUser?.getIdToken();
     if (!token) throw Object.assign(new Error("sign in first"), { code: "unauthenticated" });
-    const r = await fetch(apiUrl.replace(/\/+$/, "") + "/" + name, { method: "POST",
+    // keepalive lets the request finish even while the page is being hidden or closed (used when leaving a quiz)
+    const r = await fetch(apiUrl.replace(/\/+$/, "") + "/" + name, { method: "POST", keepalive: true,
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(data || {}) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(j.error?.message || "server error"), { code: j.error?.code || "internal" });

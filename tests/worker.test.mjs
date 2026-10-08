@@ -117,6 +117,13 @@ describe("worker: answers", () => {
     const r = await call("submitAnswer", { qid: "q5", choice: 1, quizId: "paid" }, { now: T0 + 2000, tok: await token({ now: T0 + 2000 }) });
     assert.equal(r.status, 200); assert.equal(r.body.result.me.quizCoins.paid, 4); assert.equal(r.body.result.correct, null);
   });
+  test("leaving a paid quiz closes it", async () => {
+    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5", "q6"] });
+    await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: true });
+    await call("quizQuestion", { quizId: "paid" });
+    assert.deepEqual((await call("quizLeave", { quizId: "paid" })).body.result, { locked: true });
+    assert.equal((await call("quizQuestion", { quizId: "paid" })).status, 412);
+  });
   test("private quiz questions stay hidden in the normal game", async () => {
     await put("qprivate/hq", { topic: "tajik", q: { tj: "?" }, opts: { tj: ["a", "b", "c", "d"] } }); await put("answers/hq", { correct: 1 });
     assert.equal((await call("submitAnswer", { qid: "hq", choice: 1 })).status, 412);

@@ -83,6 +83,7 @@ function applyAnswer({ score, lastMs, question, hidden = false, answer, rules, q
     if (done.includes(qid)) throw new GameError("already-exists", "already answered");
     m.quizDone[quizId] = [...done, qid];
     if (paid) {
+      if (entry.locked === true) throw new GameError("failed-precondition", "left the quiz");
       // The server handed out this question (quizQuestion) and started its timer: answers to other
       // questions, or after the time is up, do not count
       const cur = map(entry.cur);
@@ -152,17 +153,30 @@ function pickQuizQuestion({ quiz, entry, rules, now }) {
   if (!(Number(quiz.entryFee) > 0)) throw new GameError("failed-precondition", "free quiz");
   if (!(now >= quiz.start && now <= quiz.end)) throw new GameError("failed-precondition", "quiz is not active");
   if (!(entry && entry.paid === true)) throw new GameError("failed-precondition", "entry fee not paid");
-  const c = readRules(rules), lim = limitMs(c), done = list(entry.done), cur = map(entry.cur);
-  let update = null;
-  if (cur.qid && !done.includes(cur.qid)) {
-    const used = now - int(cur.at);
-    if (used <= lim) return { qid: cur.qid, remainMs: Math.max(0, c.seconds * 1000 - used), done, update: null };
-    done.push(cur.qid);                                   // time ran out (e.g. the page was closed): counts as wrong
-    update = { done, cur: null };
-  }
+  if (entry.locked === true) throw new GameError("failed-precondition", "left the quiz");
+  const done = list(entry.done), cur = map(entry.cur);
+  // Asking again while a question is still open means the page was reloaded or reopened, i.e. the player left
+  // the game in the middle of a question (possibly to look up the answer): the quiz is closed for them.
+  // Points earned before stay; the admin can let them back in.
+  if (cur.qid && !done.includes(cur.qid)) return { locked: true, qid: null, remainMs: 0, done: [...done, cur.qid], update: lockUpdate(entry, now) };
   const next = list(quiz.qids).find(q => !done.includes(q));
-  if (!next) return { qid: null, remainMs: 0, done, update };
+  if (!next) return { qid: null, remainMs: 0, done, update: null };
+  const c = readRules(rules);
   return { qid: next, remainMs: c.seconds * 1000, done, update: { done, cur: { qid: next, at: now } } };
+}
+
+// The player left a paid quiz (switched to another app or tab, closed or reloaded the page): the open question
+// counts as answered wrong and the quiz is closed for them until the admin lets them back in.
+function lockUpdate(entry, now) {
+  const done = list(entry.done), cur = map(entry.cur);
+  if (cur.qid && !done.includes(cur.qid)) done.push(cur.qid);
+  return { done, cur: null, locked: true, lockedAt: now, leaves: int(entry.leaves) + 1 };
+}
+function leaveQuiz({ quiz, entry, now }) {
+  if (!quiz || !(Number(quiz.entryFee) > 0) || !(entry && entry.paid === true) || entry.locked === true) return null;
+  if (!(now >= quiz.start && now <= quiz.end)) return null;
+  if (list(entry.done).length >= list(quiz.qids).length) return null;   // already finished: nothing to close
+  return lockUpdate(entry, now);
 }
 
 // Questions whose correct option is still public: [{ id, correct }]
@@ -170,4 +184,4 @@ function answersToMove(questions) {
   return questions.filter(q => q.data.correct !== undefined).map(q => ({ id: q.id, correct: q.data.correct }));
 }
 
-module.exports = { GameError, readRules, periodOf, dayKey, validate, applyAnswer, pickQuizQuestion, answersToMove, ID_RE };
+module.exports = { GameError, readRules, periodOf, dayKey, validate, applyAnswer, pickQuizQuestion, leaveQuiz, answersToMove, ID_RE };

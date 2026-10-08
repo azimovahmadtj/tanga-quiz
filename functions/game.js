@@ -1,6 +1,6 @@
 // Firebase Cloud Functions side of the game (Blaze plan). The rules themselves are in core.js.
 const { FieldValue, Timestamp } = require("firebase-admin/firestore");
-const { GameError, readRules, periodOf, dayKey, validate, applyAnswer, pickQuizQuestion, answersToMove, ID_RE } = require("./core");
+const { GameError, readRules, periodOf, dayKey, validate, applyAnswer, pickQuizQuestion, leaveQuiz, answersToMove, ID_RE } = require("./core");
 
 async function submitAnswer(db, uid, data, now = Date.now()) {
   if (!uid) throw new GameError("unauthenticated", "sign in first");
@@ -36,12 +36,28 @@ async function quizQuestion(db, uid, data, now = Date.now()) {
     if (res.update) tx.set(entryRef, res.update, { merge: true });
     return { res, quiz: d(zS) };
   });
+  if (res.locked) throw new GameError("failed-precondition", "left the quiz");
   const total = (quiz.qids || []).length, index = res.done.length;
   if (!res.qid) return { done: true, index, total };
   const [p, h] = await Promise.all([db.doc(`questions/${res.qid}`).get(), db.doc(`qprivate/${res.qid}`).get()]);
   const q = p.exists ? p.data() : h.exists ? h.data() : null;
   if (!q) throw new GameError("not-found", "question was deleted");
   return { done: false, index, total, remain: res.remainMs, q: { id: res.qid, topic: q.topic || "", q: q.q || {}, opts: q.opts || {}, img: q.img || "" } };
+}
+
+// The page reports that the player left a paid quiz: the quiz is closed for them (see core.leaveQuiz)
+async function quizLeave(db, uid, data, now = Date.now()) {
+  if (!uid) throw new GameError("unauthenticated", "sign in first");
+  const quizId = data && data.quizId;
+  if (typeof quizId !== "string" || !ID_RE.test(quizId)) throw new GameError("invalid-argument", "bad quiz id");
+  const entryRef = db.doc(`entries/${quizId}_${uid}`);
+  return db.runTransaction(async tx => {
+    const [zS, eS] = await Promise.all([tx.get(db.doc(`quizzes/${quizId}`)), tx.get(entryRef)]);
+    const entry = eS.exists ? eS.data() : null, update = leaveQuiz({ quiz: zS.exists ? zS.data() : null, entry, now });
+    if (!update) return { locked: !!(entry && entry.locked) };
+    tx.set(entryRef, update, { merge: true });
+    return { locked: true };
+  });
 }
 
 // One-off move of the correct options out of the public questions into the admin-only answers collection
@@ -71,4 +87,4 @@ async function importCartoons(db, uid) {
   return { added: items.length };
 }
 
-module.exports = { submitAnswer, quizQuestion, migrateAnswers, importCartoons, GameError, readRules, periodOf, dayKey };
+module.exports = { submitAnswer, quizQuestion, quizLeave, migrateAnswers, importCartoons, GameError, readRules, periodOf, dayKey };

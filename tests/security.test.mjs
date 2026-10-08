@@ -329,16 +329,37 @@ describe("submitAnswer (server)", () => {
     const r = await ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 60000);       // limit is 20 s + 5 s
     assert.equal(r.ok, false); assert.equal(r.gain, 0);
   });
-  test("paid quiz: reloading the page does not restart the timer", async () => {
+  const leave = (t = T0, uid = "u1") => game.quizLeave(adminDb, uid, { quizId: "paid" }, t);
+  const entryNow = async () => (await adminDb.doc("entries/paid_u1").get()).data();
+  test("paid quiz: reopening the page during a question closes the quiz", async () => {
     await paidQuiz(); await paidEntry(); await serve();
-    const again = await serve(T0 + 15000);
-    assert.equal(again.q.id, "q5"); assert.equal(again.remain, 5000);
+    await code(serve(T0 + 5000), "failed-precondition");
+    const e = await entryNow(); assert.equal(e.locked, true); assert.deepEqual(e.done, ["q5"]);
+    await code(serve(T0 + 9000), "failed-precondition");                       // stays closed
+    await code(ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 9500), "already-exists");
   });
-  test("paid quiz: an abandoned question counts as answered when the time is up", async () => {
+  test("paid quiz: leaving the page (other app or tab) closes the quiz but keeps earned points", async () => {
     await paidQuiz(); await paidEntry(); await serve();
-    const next = await serve(T0 + 60000);
-    assert.equal(next.q.id, "q6");
-    await code(ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 61000), "already-exists");
+    await ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 1000);
+    await serve(T0 + 2000);
+    assert.deepEqual(await leave(T0 + 3000), { locked: true });
+    const e = await entryNow(); assert.equal(e.locked, true); assert.deepEqual(e.done, ["q5", "q6"]); assert.equal(e.coins, 4);
+    await code(ask({ qid: "q6", choice: 1, quizId: "paid" }, T0 + 4000), "already-exists");
+    await code(serve(T0 + 5000), "failed-precondition");
+  });
+  test("paid quiz: the admin can let the player back in", async () => {
+    await paidQuiz(); await paidEntry(); await serve(); await leave(T0 + 1000);
+    await adminDb.doc("entries/paid_u1").update({ locked: false });
+    assert.equal((await serve(T0 + 2000)).q.id, "q6");
+  });
+  test("paid quiz: leaving after finishing changes nothing", async () => {
+    await paidQuiz(["q5"]); await paidEntry(); await serve(); await ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 1000);
+    assert.deepEqual(await leave(T0 + 2000), { locked: false });
+    assert.equal((await entryNow()).locked, undefined);
+  });
+  test("paid quiz: leaving cannot be reported for someone else's entry", async () => {
+    await paidQuiz(); await paidEntry(); await serve();
+    await leave(T0 + 1000, "u2"); assert.equal((await entryNow()).locked, undefined);
   });
   test("paid quiz: questions are handed out only to paid players", async () => {
     await paidQuiz(); await code(serve(), "failed-precondition");

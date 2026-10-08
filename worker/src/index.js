@@ -5,7 +5,7 @@ import cartoons from "../../functions/seed/cartoons.js";
 import { verifyIdToken, serviceAccountToken, AuthError } from "./auth.js";
 import { Firestore, FirestoreError } from "./firestore.js";
 
-const { GameError, validate, applyAnswer, pickQuizQuestion, answersToMove, ID_RE } = core;
+const { GameError, validate, applyAnswer, pickQuizQuestion, leaveQuiz, answersToMove, ID_RE } = core;
 const STATUS = { "invalid-argument": 400, unauthenticated: 401, "permission-denied": 403, "not-found": 404, "already-exists": 409,
   "failed-precondition": 412, "resource-exhausted": 429, internal: 500 };
 const MAX_BODY = 4096;
@@ -66,12 +66,28 @@ async function quizQuestion(store, uid, data, now) {
       if (e instanceof FirestoreError && (e.status === 409 || e.status === 400 && /transaction/i.test(e.message))) continue;
       throw e;
     }
+    if (res.locked) throw new GameError("failed-precondition", "left the quiz");
     const total = (quiz.qids || []).length, index = res.done.length;
     if (!res.qid) return { done: true, index, total };
     const [pub, hid] = await store.getAll([`questions/${res.qid}`, `qprivate/${res.qid}`]);
     const q = pub ?? hid;
     if (!q) throw new GameError("not-found", "question was deleted");
     return { done: false, index, total, remain: res.remainMs, q: { id: res.qid, topic: q.topic || "", q: q.q || {}, opts: q.opts || {}, img: q.img || "" } };
+  }
+  throw new GameError("resource-exhausted", "busy, try again");
+}
+
+// The page reports that the player left a paid quiz (another app or tab, closed page): the quiz is closed for them
+async function quizLeave(store, uid, data, now) {
+  const quizId = data && data.quizId;
+  if (typeof quizId !== "string" || !ID_RE.test(quizId)) throw new GameError("invalid-argument", "bad quiz id");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const tx = await store.begin();
+    const [quiz, entry] = await store.getAll([`quizzes/${quizId}`, `entries/${quizId}_${uid}`], tx);
+    const update = leaveQuiz({ quiz, entry, now });
+    if (!update) { await store.rollback(tx); return { locked: !!(entry && entry.locked) }; }
+    try { await store.commit([store.set(`entries/${quizId}_${uid}`, { ...entry, ...update })], tx); return { locked: true }; }
+    catch (e) { if (e instanceof FirestoreError && (e.status === 409 || e.status === 400 && /transaction/i.test(e.message))) continue; throw e; }
   }
   throw new GameError("resource-exhausted", "busy, try again");
 }
@@ -101,7 +117,7 @@ async function importCartoons(store, uid, _data, now) {
   return { added: cartoons.length };
 }
 
-const ROUTES = { submitAnswer, quizQuestion, migrateAnswers, importCartoons };
+const ROUTES = { submitAnswer, quizQuestion, quizLeave, migrateAnswers, importCartoons };
 
 export async function handle(req, env, now = Date.now()) {
   const origin = req.headers.get("Origin");
