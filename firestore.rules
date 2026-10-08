@@ -123,6 +123,9 @@ service cloud.firestore {
                                      && request.resource.data.diff(resource.data).affectedKeys()
                                           .hasOnly(['nick', 'nickLower', 'avatar', 'region', 'wrong', 'wrongAns', 'updatedAt', 'srvAt'])
                                      && request.resource.data.get('wrong', []).size() <= resource.data.get('wrong', []).size()
+                                     // old mistakes stored here can only be cleared, never written
+                                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['wrongAns'])
+                                         || request.resource.data.get('wrongAns', {}).size() == 0)
                                      && rateOk(request.resource.data, resource.data)
                                      && ownsNick(uid, request.resource.data)
                                      && nickReleased(resource.data, request.resource.data));
@@ -135,6 +138,10 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.keys().hasOnly(['uid'])
                     && request.resource.data.uid == request.auth.uid
                     && nick.matches('^[\\p{Ll}\\p{Lo}\\p{Lm}\\p{N}_]{3,20}$')
+                    // one alphabet per nickname (no look-alike mixes such as Latin "a" with Cyrillic "а"),
+                    // and no names that pretend to be the site or its staff
+                    && nick.matches('^([\\p{Latin}\\p{N}_]+|[\\p{Cyrillic}\\p{N}_]+|[\\p{Arabic}\\p{N}_]+)$')
+                    && !nick.matches('.*(admin|админ|маъмур|moder|модер|support|tanga|танга).*')
                     && getAfter(/databases/$(database)/documents/scores/$(request.auth.uid)).data.get('nickLower', '') == nick;
       allow update: if false;
       allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
@@ -156,6 +163,15 @@ service cloud.firestore {
                     && request.resource.data.createdAt is int;
       allow update: if isAdmin();
       allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.paid == false);
+    }
+
+    // Correct options of the player's own mistakes ("My questions"): private, written by the server;
+    // the player may only clear them. Kept out of the public score so nobody can collect an answer key.
+    match /mistakes/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow create, update: if isSelf(uid) && request.resource.data.keys().hasOnly(['ans'])
+                            && request.resource.data.ans is map && request.resource.data.ans.size() == 0;
+      allow delete: if isSelf(uid) || isAdmin();
     }
 
     // Private contact details: only the player and the admin

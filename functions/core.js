@@ -56,7 +56,8 @@ function validate(data) {
 // Applies one answer to a player's score. Inputs are plain document data (null when the document is missing);
 // lastMs is the time of the player's previous server write. Returns the new score, or throws a GameError.
 // entry is the player's /entries/{quizId}_{uid} document: quizzes with an entry fee only count paid players.
-function applyAnswer({ score, lastMs, question, hidden = false, answer, rules, quiz, entry, qid, choice, quizId, now }) {
+// mistakes is the private /mistakes/{uid} document ({ ans: { qid: correct } }); the public score never holds correct options.
+function applyAnswer({ score, lastMs, question, hidden = false, answer, rules, quiz, entry, mistakes = null, qid, choice, quizId, now }) {
   if (!score || !score.nick) throw new GameError("failed-precondition", "register first");
   if (!question) throw new GameError("not-found", "no such question");
   const correct = answer ? answer.correct : question.correct;
@@ -67,6 +68,8 @@ function applyAnswer({ score, lastMs, question, hidden = false, answer, rules, q
   if (now - (lastMs || 0) < MIN_GAP_MS) throw new GameError("resource-exhausted", "too fast");
 
   let gain, topic, entryOut = null, hide = false, late = false;
+  const ans0 = { ...map(m.wrongAns), ...map(mistakes && mistakes.ans) };
+  m.wrongAns = { ...ans0 };
   if (quizId) {
     if (!quiz) throw new GameError("not-found", "no such quiz");
     const z = quiz;
@@ -131,8 +134,11 @@ function applyAnswer({ score, lastMs, question, hidden = false, answer, rules, q
   else m.activity = [{ topic, right: ok ? 1 : 0, total: 1, t: now }, ...m.activity].slice(0, 8);
   m.updatedAt = now;
   delete m.dayStart; delete m.srvAt;
-  // In a paid quiz the correct option is not revealed, so players cannot pass answers to each other
-  return { m, ok, correct: hide ? null : correct, gain: ok ? gain : 0, entry: entryOut };
+  const ans = m.wrongAns; delete m.wrongAns;
+  const changed = JSON.stringify(ans) !== JSON.stringify(ans0) || !!(score.wrongAns && Object.keys(score.wrongAns).length);
+  // In a paid quiz the correct option is not revealed, so players cannot pass answers to each other.
+  // me (sent only to this player) carries the mistakes for the "My questions" page; m is what is stored publicly.
+  return { m, me: { ...m, wrongAns: ans }, ok, correct: hide ? null : correct, gain: ok ? gain : 0, entry: entryOut, mistakes: changed ? { ans } : null };
 }
 
 // Time allowed for one question of a paid quiz: the game's seconds plus a margin for the network

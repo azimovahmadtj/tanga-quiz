@@ -7,17 +7,18 @@ async function submitAnswer(db, uid, data, now = Date.now()) {
   const { qid, choice, quizId } = validate(data);
   const scoreRef = db.doc(`scores/${uid}`);
   return db.runTransaction(async tx => {
-    const [sS, qS, aS, cS, zS, eS, hS] = await Promise.all([
+    const [sS, qS, aS, cS, zS, eS, hS, mS] = await Promise.all([
       tx.get(scoreRef), tx.get(db.doc(`questions/${qid}`)), tx.get(db.doc(`answers/${qid}`)),
       tx.get(db.doc("config/rules")), quizId ? tx.get(db.doc(`quizzes/${quizId}`)) : Promise.resolve(null),
-      quizId ? tx.get(db.doc(`entries/${quizId}_${uid}`)) : Promise.resolve(null), tx.get(db.doc(`qprivate/${qid}`))]);
+      quizId ? tx.get(db.doc(`entries/${quizId}_${uid}`)) : Promise.resolve(null), tx.get(db.doc(`qprivate/${qid}`)), tx.get(db.doc(`mistakes/${uid}`))]);
     const d = x => (x && x.exists ? x.data() : null);
-    const { m, ok, correct, gain, entry } = applyAnswer({
-      score: d(sS), lastMs: d(sS)?.srvAt?.toMillis?.() || 0, question: d(qS) ?? d(hS), hidden: !d(qS) && !!d(hS), answer: d(aS), rules: d(cS), quiz: d(zS), entry: d(eS),
+    const { m, me, ok, correct, gain, entry, mistakes } = applyAnswer({
+      score: d(sS), lastMs: d(sS)?.srvAt?.toMillis?.() || 0, question: d(qS) ?? d(hS), hidden: !d(qS) && !!d(hS), answer: d(aS), rules: d(cS), quiz: d(zS), entry: d(eS), mistakes: d(mS),
       qid, choice, quizId, now });
     tx.set(scoreRef, { ...m, srvAt: Timestamp.fromMillis(now) });
     if (entry) tx.set(db.doc(`entries/${quizId}_${uid}`), entry, { merge: true });
-    return { ok, correct, gain, me: m };
+    if (mistakes) tx.set(db.doc(`mistakes/${uid}`), mistakes);
+    return { ok, correct, gain, me };
   });
 }
 

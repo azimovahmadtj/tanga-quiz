@@ -123,7 +123,7 @@ window.FB = {
   nickOwner: async lower => { const s = await getDoc(doc(fdb, "nicks/" + lower)); return s.exists() ? s.data().uid : null; },
   deleteMine: (uid, nickLower) => {
     const b = writeBatch(fdb);
-    b.delete(doc(fdb, "scores/" + uid)); b.delete(doc(fdb, "contacts/" + uid));
+    b.delete(doc(fdb, "scores/" + uid)); b.delete(doc(fdb, "contacts/" + uid)); b.delete(doc(fdb, "mistakes/" + uid));
     if (nickLower) b.delete(doc(fdb, "nicks/" + nickLower));
     return b.commit();
   },

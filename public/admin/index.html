@@ -810,7 +810,9 @@ function renderMine(){
      :`<div class="empty"><p>${esc(t("mineEmpty"))}</p></div>`}</div>`;
   if($("clr"))$("clr").onclick=async()=>{S.me.wrong=[];await saveMe();renderMine()}}
 function renderLogin(){$("view").innerHTML=`<div class="card empty" style="max-width:560px"><h3>${esc(t("loginTitle"))}</h3><p>${esc(t("loginText"))}</p></div>`}
-const NICK_RE=/^[\p{L}\p{N}_]{3,20}$/u;
+// One alphabet per nickname (no look-alike mixes) and no names pretending to be the site or its staff;
+// the same check is in firestore.rules
+const NICK_RE={test:n=>/^[\p{L}\p{N}_]{3,20}$/u.test(n)&&/^(?:[\p{Script=Latin}\p{N}_]+|[\p{Script=Cyrillic}\p{N}_]+|[\p{Script=Arabic}\p{N}_]+)$/u.test(n)&&!/admin|админ|маъмур|moder|модер|support|tanga|танга/i.test(n)};
 function profileForm(isNew){const c=S.contact||{},m=S.me||{};
   return `<form class="add" id="regForm" novalidate>
     <label class="f">${esc(t("nick"))}<input type="text" name="nick" maxlength="21" autocomplete="nickname" value="${esc(m.nick||"")}"></label>

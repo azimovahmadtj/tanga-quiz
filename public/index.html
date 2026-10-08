@@ -457,7 +457,7 @@ const T={
   someone:"Бозингар",offline:"Пайвастшавӣ ба пойгоҳ имконнопазир аст. Саҳифаро аз нав кушоед.",
   regTitle:"Бақайдгирӣ",regIntro:"Барои бозӣ ва гирифтани мукофот профил созед. Рақам ва Telegram танҳо ба маъмури сайт намоён аст.",
   nick:"Лақаб (дар ҷадвал нишон дода мешавад)",fullName:"Ному насаб",phone:"Рақами телефон",tg:"Telegram (ихтиёрӣ)",register:"Ба қайд гирифтан",regDone:"Шумо ба қайд гирифта шудед",
-  nickTaken:"Ин лақаб аллакай банд аст",nickBad:"Лақаб 3–20 аломат бошад: ҳарфҳо, рақамҳо, _",needAll:"Лақаб, ном ва телефонро пур кунед",
+  nickTaken:"Ин лақаб аллакай банд аст",nickBad:"Лақаб 3–20 аломат бошад: ҳарфҳои як алифбо (лотинӣ ё кириллӣ), рақамҳо, _. Калимаҳои admin, tanga ва монанди инҳо мумкин нестанд",needAll:"Лақаб, ном ва телефонро пур кунед",
   loginTitle:"Ворид шавед",loginText:"Барои бозӣ ба ҳисоби худ ворид шавед ва ин саҳифаро аз нав кушоед. Баъд аз воридшавӣ профил месозед.",
   saveProfile:"Тағйиротро нигоҳ доштан",profSaved:"Профил нигоҳ дошта шуд",guest:"Меҳмон",theme:"Намуди зоҳирӣ",tAuto:"Худкор",tLight:"Равшан",tDark:"Торик",language:"Забон",
   mineIntro:"Саволҳое, ки ба онҳо нодуруст ҷавоб додед. Ҷавоби дурустро такрор кунед.",mineEmpty:"Ҳанӯз саволи хато нест. Офарин!",correctIs:"Ҷавоби дуруст:",clear:"Рӯйхатро пок кардан",
@@ -485,7 +485,7 @@ const T={
   someone:"Игрок",offline:"Не удалось подключиться к базе. Откройте страницу заново.",
   regTitle:"Регистрация",regIntro:"Создайте профиль, чтобы играть и получать призы. Телефон и Telegram видит только администратор.",
   nick:"Никнейм (виден в таблице)",fullName:"Имя и фамилия",phone:"Номер телефона",tg:"Telegram (необязательно)",register:"Зарегистрироваться",regDone:"Вы зарегистрированы",
-  nickTaken:"Этот никнейм уже занят",nickBad:"Никнейм: 3–20 символов, буквы, цифры, _",needAll:"Заполните никнейм, имя и телефон",
+  nickTaken:"Этот никнейм уже занят",nickBad:"Никнейм: 3–20 символов — буквы одного алфавита (латиница или кириллица), цифры, _. Слова admin, tanga и подобные нельзя",needAll:"Заполните никнейм, имя и телефон",
   loginTitle:"Войдите",loginText:"Чтобы играть, войдите в свой аккаунт и откройте страницу заново. После входа создадите профиль.",
   saveProfile:"Сохранить изменения",profSaved:"Профиль сохранён",guest:"Гость",theme:"Оформление",tAuto:"Авто",tLight:"Светлая",tDark:"Тёмная",language:"Язык",
   mineIntro:"Вопросы, на которые вы ответили неверно. Повторите правильный ответ.",mineEmpty:"Ошибок пока нет. Отлично!",correctIs:"Правильный ответ:",clear:"Очистить список",
@@ -513,7 +513,7 @@ const T={
   someone:"Player",offline:"Couldn't connect to the database. Reopen the page.",
   regTitle:"Sign up",regIntro:"Create a profile to play and win prizes. Only the site admin sees your phone and Telegram.",
   nick:"Nickname (shown on the leaderboard)",fullName:"Full name",phone:"Phone number",tg:"Telegram (optional)",register:"Sign up",regDone:"You're signed up",
-  nickTaken:"That nickname is taken",nickBad:"Nickname: 3–20 characters, letters, digits, _",needAll:"Fill in nickname, name and phone",
+  nickTaken:"That nickname is taken",nickBad:"Nickname: 3–20 characters — letters of one alphabet (Latin or Cyrillic), digits, _. Words like admin or tanga are not allowed",needAll:"Fill in nickname, name and phone",
   loginTitle:"Sign in",loginText:"Sign in to your account and reopen this page to play. You'll create a profile after signing in.",
   saveProfile:"Save changes",profSaved:"Profile saved",guest:"Guest",theme:"Appearance",tAuto:"Auto",tLight:"Light",tDark:"Dark",language:"Language",
   mineIntro:"Questions you got wrong. Review the correct answers.",mineEmpty:"No mistakes yet. Well done!",correctIs:"Correct answer:",clear:"Clear list",
@@ -838,9 +838,11 @@ function renderMine(){
      <div class="ans">${esc(t("correctIs"))} <b>${esc((q.opts?.[lang]||q.opts?.tj||q.opts?.ru||q.opts?.en||[])[m.wrongAns?.[q.id]??q.correct]??"")}</b></div></div>`).join("")}</div>
      <button class="btn ghost" id="clr" style="margin-top:14px">${esc(t("clear"))}</button>`
      :`<div class="empty"><p>${esc(t("mineEmpty"))}</p></div>`}</div>`;
-  if($("clr"))$("clr").onclick=async()=>{S.me.wrong=[];S.me.wrongAns={};await saveProfile({wrong:[],wrongAns:{}}).catch(()=>{});renderMine()}}
+  if($("clr"))$("clr").onclick=async()=>{S.me.wrong=[];S.me.wrongAns={};await saveProfile({wrong:[],wrongAns:{}}).catch(()=>{});S.db.doc("mistakes/"+S.uid).set({ans:{}}).catch(()=>{});renderMine()}}
 function renderLogin(){$("view").innerHTML=`<div class="card empty" style="max-width:560px"><h3>${esc(t("loginTitle"))}</h3><p>${esc(t("loginText"))}</p></div>`}
-const NICK_RE=/^[\p{L}\p{N}_]{3,20}$/u;
+// One alphabet per nickname (no look-alike mixes) and no names pretending to be the site or its staff;
+// the same check is in firestore.rules
+const NICK_RE={test:n=>/^[\p{L}\p{N}_]{3,20}$/u.test(n)&&/^(?:[\p{Script=Latin}\p{N}_]+|[\p{Script=Cyrillic}\p{N}_]+|[\p{Script=Arabic}\p{N}_]+)$/u.test(n)&&!/admin|админ|маъмур|moder|модер|support|tanga|танга/i.test(n)};
 function profileForm(isNew){const c=S.contact||{},m=S.me||{};
   const fld=(ic,label,input)=>`<label class="st-f">${esc(label)}<span class="st-in">${ic}${input}</span></label>`;
   return `<form id="regForm" novalidate><div style="display:grid;gap:14px">
@@ -1127,7 +1129,7 @@ function nickBase(u){
   const clean=x=>String(x||"").normalize("NFC").trim().replace(/[\s.\-]+/g,"_").replace(/[^\p{L}\p{N}_]/gu,"").replace(/_+/g,"_").replace(/^_|_$/g,"")
     .split("").filter(c=>c.toLowerCase().length===1&&NICK_LOWER_RE.test(c.toLowerCase().repeat(3))).join("").slice(0,20).replace(/_$/,"");
   const a=clean(u.displayName),b=clean((u.email||"").split("@")[0]);
-  return a.length>=3?a:b.length>=3?b:"player"}
+  return [a,b].find(x=>x.length>=3&&NICK_RE.test(x))||"player"}
 async function googleProfile(u){
   const base=nickBase(u);
   for(let i=0;i<8;i++){
@@ -1242,7 +1244,8 @@ const fbReady=new Promise(r=>{if(window.FB)r();else addEventListener("fb-ready",
   await fbReady;const db=FB.db;S.db=db;
   const soft=()=>{if(!$("auth").hidden||S.view==="play"||["settings","register"].includes(S.view))return paintChrome();render()};
   db.collection("questions").onSnapshot(s=>{S.questions=s.docs.map(d=>{const x={id:d.id,...d.data()};if(x.topic==="history")x.topic="tajik";return x});soft()},()=>{});
-  db.collection("scores").where("period","==",period()).onSnapshot(s=>{S.board=s.docs.map(d=>({id:d.id,...d.data()}));soft()},()=>{});
+  // Top 200 of the round only (fake accounts with big photos cannot make every visitor download all profiles)
+  db.collection("scores").where("period","==",period()).orderBy("coins","desc").limit(200).onSnapshot(s=>{S.board=s.docs.map(d=>({id:d.id,...d.data()}));soft()},()=>{});
   db.collection("quizzes").onSnapshot(s=>{S.quizzes=s.docs.map(d=>({id:d.id,...d.data()}));soft()},()=>{});
   db.doc("config/topics").onSnapshot(s=>{applyCustom(s.exists?s.data().list:[]);soft()},()=>{});
   db.doc("config/rules").onSnapshot(s=>{applyRules(s.exists?s.data():null);soft()},()=>{});
@@ -1254,6 +1257,8 @@ const fbReady=new Promise(r=>{if(window.FB)r();else addEventListener("fb-ready",
     if(S.offEntries){S.offEntries();S.offEntries=null}S.entries={};
     if(S.uid)S.offEntries=db.collection("entries").where("uid","==",S.uid).onSnapshot(r=>{S.entries={};r.docs.forEach(d=>{const x=d.data();S.entries[x.quizId]=x});soft()},()=>{});
     if(S.uid){try{const snap=await db.doc("scores/"+S.uid).get();const d=snap.exists?snap.data():null;S.hadDoc=!!d;S.me=normMe(d)}catch(e){S.me=normMe(null)}
+      // Correct options of the player's mistakes are private (/mistakes/{uid}), not in the public score
+      try{const mk=await db.doc("mistakes/"+S.uid).get();if(mk.exists)S.me.wrongAns={...(S.me.wrongAns||{}),...(mk.data().ans||{})}}catch(e){}
       if(S.me?.nickLower)FB.nickOwner(S.me.nickLower).then(o=>{if(!o)return saveProfile({nick:S.me.nick,nickLower:S.me.nickLower},{claimNick:true}).catch(()=>{});
         if(o!==S.uid){toast(t("nickTaken"));go("settings")}}).catch(()=>{});
       try{const c=await db.doc("contacts/"+S.uid).get();if(c.exists)S.contact=c.data()}catch(e){}

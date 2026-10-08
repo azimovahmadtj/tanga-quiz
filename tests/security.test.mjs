@@ -239,6 +239,23 @@ describe("attacks found in the security audit", () => {
     await allow(getDoc(doc(ctx("boss"), "qprivate/hq")));
     await deny(setDoc(doc(ctx("p1"), "qprivate/x"), { q: { tj: "?" } }));
   });
+  test("mistakes (with correct options) are private", async () => {
+    await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), "mistakes/champ"), { ans: { q1: 2 } }));
+    await deny(getDoc(doc(ctx("p1"), "mistakes/champ"))); await deny(getDoc(doc(ctx("anon"), "mistakes/champ")));
+    await allow(getDoc(doc(ctx("champ"), "mistakes/champ")));
+  });
+  test("a player can clear but not write their mistakes", async () => {
+    await allow(setDoc(doc(ctx("p1"), "mistakes/p1"), { ans: {} }));
+    await deny(setDoc(doc(ctx("p1"), "mistakes/p1"), { ans: { q1: 0 } }));
+    await deny(setDoc(doc(ctx("p1"), "mistakes/champ"), { ans: {} }));
+  });
+  for (const [why, nick] of [["mixes Latin and Cyrillic look-alikes", "Аhmad"], ["pretends to be the admin", "Tanga_Admin"], ["pretends to be staff (Tajik)", "Маъмур1"]])
+    test(`cannot take a nickname that ${why}`, () => deny(register("p2", fresh({ nick, nickLower: nick.toLowerCase() }))));
+  test("a Tajik Cyrillic nickname is fine", () => allow(register("p2", fresh({ nick: "Ҳусайн_7", nickLower: "ҳусайн_7" }))));
+  test("cannot write correct options into the public profile", () =>
+    deny(updateDoc(doc(ctx("p1"), "scores/p1"), { wrongAns: { q1: 2 }, updatedAt: NOW, srvAt: serverTimestamp() })));
+  test("can clear old mistakes", () =>
+    allow(updateDoc(doc(ctx("p1"), "scores/p1"), { wrong: [], wrongAns: {}, updatedAt: NOW, srvAt: serverTimestamp() })));
   test("an entry must carry the player's real nickname", () =>
     deny(setDoc(doc(ctx("p1"), "entries/z1_p1"), { quizId: "z1", uid: "p1", nick: "Champ", createdAt: NOW, paid: false })));
 });
@@ -338,6 +355,19 @@ describe("submitAnswer (server)", () => {
     await paidQuiz(["hq"]); await paidEntry();
     const q = await serve(); assert.equal(q.q.q.tj, "Hidden?");
     assert.equal((await ask({ qid: "hq", choice: 2, quizId: "paid" }, T0 + 1000)).ok, true);
+  });
+  test("a wrong answer keeps the correct option out of the public profile", async () => {
+    const r = await ask({ qid: "q1", choice: 3 });
+    assert.equal(r.me.wrongAns.q1, 1);                                   // the player sees it in the reply
+    const pub = (await adminDb.doc("scores/u1").get()).data();
+    assert.equal(pub.wrongAns, undefined); assert.deepEqual(pub.wrong, ["q1"]);
+    assert.deepEqual((await adminDb.doc("mistakes/u1").get()).data().ans, { q1: 1 });
+  });
+  test("old public mistakes move to the private document", async () => {
+    await put("scores/u1", { nick: "U", nickLower: "u", period: P0, coins: 0, answered: [], day: game.dayKey(T0), dayCount: 0, totalAnswered: 0, totalCorrect: 0, wrong: ["q9"], wrongAns: { q9: 3 } });
+    await ask({ qid: "q1", choice: 1 });
+    assert.equal((await adminDb.doc("scores/u1").get()).data().wrongAns, undefined);
+    assert.deepEqual((await adminDb.doc("mistakes/u1").get()).data().ans, { q9: 3 });
   });
   test("quiz-only questions cannot be answered outside the quiz", async () => {
     await put("questions/q5", { topic: "tajik", q: { tj: "?" }, opts: { tj: ["a", "b", "c", "d"] }, quizOnly: true });

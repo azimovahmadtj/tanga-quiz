@@ -26,18 +26,19 @@ async function submitAnswer(store, uid, data, now) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const tx = await store.begin();
     // Questions of paid quizzes are kept in the private /qprivate collection until the quiz hands them out
-    const [score, pub, hid, answer, rules, quiz, entry] = await store.getAll(
-      [`scores/${uid}`, `questions/${qid}`, `qprivate/${qid}`, `answers/${qid}`, "config/rules", ...(quizId ? [`quizzes/${quizId}`, `entries/${quizId}_${uid}`] : [])], tx);
+    const [score, pub, hid, answer, rules, mistakes, quiz, entry] = await store.getAll(
+      [`scores/${uid}`, `questions/${qid}`, `qprivate/${qid}`, `answers/${qid}`, "config/rules", `mistakes/${uid}`, ...(quizId ? [`quizzes/${quizId}`, `entries/${quizId}_${uid}`] : [])], tx);
     const question = pub ?? hid, hidden = !pub && !!hid;
     let res;
     try {
-      res = applyAnswer({ score, lastMs: score?.srvAt?.__ts || 0, question, hidden, answer, rules, quiz: quiz ?? null, entry: entry ?? null, qid, choice, quizId, now });
+      res = applyAnswer({ score, lastMs: score?.srvAt?.__ts || 0, question, hidden, answer, mistakes, rules, quiz: quiz ?? null, entry: entry ?? null, qid, choice, quizId, now });
     } catch (e) { await store.rollback(tx); throw e; }
     try {
       const writes = [store.set(`scores/${uid}`, { ...res.m, srvAt: { __ts: now } })];
       if (res.entry) writes.push(store.set(`entries/${quizId}_${uid}`, { ...entry, ...res.entry }));
+      if (res.mistakes) writes.push(store.set(`mistakes/${uid}`, res.mistakes));
       await store.commit(writes, tx);
-      return { ok: res.ok, correct: res.correct, gain: res.gain, me: res.m };
+      return { ok: res.ok, correct: res.correct, gain: res.gain, me: res.me };
     } catch (e) {
       if (e instanceof FirestoreError && (e.status === 409 || e.status === 400 && /transaction/i.test(e.message))) continue;   // lost a race: retry
       throw e;
