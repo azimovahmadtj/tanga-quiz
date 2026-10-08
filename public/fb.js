@@ -110,7 +110,14 @@ window.FB = {
   },
   deleteQuestion: id => {
     const b = writeBatch(fdb);
-    b.delete(doc(fdb, "questions/" + id)); b.delete(doc(fdb, "answers/" + id));
+    b.delete(doc(fdb, "questions/" + id)); b.delete(doc(fdb, "qprivate/" + id)); b.delete(doc(fdb, "answers/" + id));
+    return b.commit();
+  },
+  // Admin: moves a question between the public /questions and the private /qprivate (paid quizzes only)
+  moveQuestion: (id, data, toPrivate) => {
+    const b = writeBatch(fdb);
+    b.set(doc(fdb, (toPrivate ? "qprivate/" : "questions/") + id), data);
+    b.delete(doc(fdb, (toPrivate ? "questions/" : "qprivate/") + id));
     return b.commit();
   },
   nickOwner: async lower => { const s = await getDoc(doc(fdb, "nicks/" + lower)); return s.exists() ? s.data().uid : null; },

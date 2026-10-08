@@ -56,7 +56,7 @@ function validate(data) {
 // Applies one answer to a player's score. Inputs are plain document data (null when the document is missing);
 // lastMs is the time of the player's previous server write. Returns the new score, or throws a GameError.
 // entry is the player's /entries/{quizId}_{uid} document: quizzes with an entry fee only count paid players.
-function applyAnswer({ score, lastMs, question, answer, rules, quiz, entry, qid, choice, quizId, now }) {
+function applyAnswer({ score, lastMs, question, hidden = false, answer, rules, quiz, entry, qid, choice, quizId, now }) {
   if (!score || !score.nick) throw new GameError("failed-precondition", "register first");
   if (!question) throw new GameError("not-found", "no such question");
   const correct = answer ? answer.correct : question.correct;
@@ -66,7 +66,7 @@ function applyAnswer({ score, lastMs, question, answer, rules, quiz, entry, qid,
   const m = normalize(score, periodOf(c, now), dayKey(now));
   if (now - (lastMs || 0) < MIN_GAP_MS) throw new GameError("resource-exhausted", "too fast");
 
-  let gain, topic, entryOut = null, hide = false;
+  let gain, topic, entryOut = null, hide = false, late = false;
   if (quizId) {
     if (!quiz) throw new GameError("not-found", "no such quiz");
     const z = quiz;
@@ -79,13 +79,20 @@ function applyAnswer({ score, lastMs, question, answer, rules, quiz, entry, qid,
     const done = [...new Set([...list(m.quizDone[quizId]), ...(paid ? list(entry.done) : [])])];
     if (done.includes(qid)) throw new GameError("already-exists", "already answered");
     m.quizDone[quizId] = [...done, qid];
-    if (paid) { hide = true; entryOut = { done: m.quizDone[quizId], coins: int(entry.coins) }; }
+    if (paid) {
+      // The server handed out this question (quizQuestion) and started its timer: answers to other
+      // questions, or after the time is up, do not count
+      const cur = map(entry.cur);
+      if (cur.qid !== qid) throw new GameError("failed-precondition", "question not served");
+      late = now - int(cur.at) > limitMs(c);
+      hide = true; entryOut = { done: m.quizDone[quizId], coins: int(entry.coins), cur: null };
+    } else if (hidden) throw new GameError("failed-precondition", "quiz only");
     m.lastQuiz = quizId;
     gain = Number.isInteger(z.bonus) && z.bonus >= 1 && z.bonus <= 1000 ? z.bonus : c.coinsPerRight;
     topic = "quiz:" + quizId;
   } else {
     // Questions reserved for a quiz are never answered (and so never revealed) in the normal game
-    if (question.quizOnly === true) throw new GameError("failed-precondition", "quiz only");
+    if (hidden || question.quizOnly === true) throw new GameError("failed-precondition", "quiz only");
     if (m.answered.includes(qid)) throw new GameError("already-exists", "already answered");
     if (m.dayCount >= c.dailyLimit) throw new GameError("resource-exhausted", "daily limit");
     m.answered.push(qid);
@@ -96,7 +103,7 @@ function applyAnswer({ score, lastMs, question, answer, rules, quiz, entry, qid,
     m.lastTopic = topic;
   }
   m.totalAnswered++;
-  const ok = choice === correct;
+  const ok = !late && choice === correct;
   if (ok) {
     m.coins += gain; m.dayCoins += gain; m.totalCorrect++;
     // Points in each quiz, for its winners table (prizes go to the top 3)
@@ -128,9 +135,33 @@ function applyAnswer({ score, lastMs, question, answer, rules, quiz, entry, qid,
   return { m, ok, correct: hide ? null : correct, gain: ok ? gain : 0, entry: entryOut };
 }
 
+// Time allowed for one question of a paid quiz: the game's seconds plus a margin for the network
+const limitMs = c => (c.seconds + 5) * 1000;
+
+// Paid quizzes: the server hands out the questions one at a time and remembers when (entry.cur), so the
+// questions are not public in advance and the time limit is checked on the server, not in the browser.
+// Returns { qid (null when finished), remainMs, update (fields to save in the entry, or null) }.
+function pickQuizQuestion({ quiz, entry, rules, now }) {
+  if (!quiz) throw new GameError("not-found", "no such quiz");
+  if (!(Number(quiz.entryFee) > 0)) throw new GameError("failed-precondition", "free quiz");
+  if (!(now >= quiz.start && now <= quiz.end)) throw new GameError("failed-precondition", "quiz is not active");
+  if (!(entry && entry.paid === true)) throw new GameError("failed-precondition", "entry fee not paid");
+  const c = readRules(rules), lim = limitMs(c), done = list(entry.done), cur = map(entry.cur);
+  let update = null;
+  if (cur.qid && !done.includes(cur.qid)) {
+    const used = now - int(cur.at);
+    if (used <= lim) return { qid: cur.qid, remainMs: Math.max(0, c.seconds * 1000 - used), done, update: null };
+    done.push(cur.qid);                                   // time ran out (e.g. the page was closed): counts as wrong
+    update = { done, cur: null };
+  }
+  const next = list(quiz.qids).find(q => !done.includes(q));
+  if (!next) return { qid: null, remainMs: 0, done, update };
+  return { qid: next, remainMs: c.seconds * 1000, done, update: { done, cur: { qid: next, at: now } } };
+}
+
 // Questions whose correct option is still public: [{ id, correct }]
 function answersToMove(questions) {
   return questions.filter(q => q.data.correct !== undefined).map(q => ({ id: q.id, correct: q.data.correct }));
 }
 
-module.exports = { GameError, readRules, periodOf, dayKey, validate, applyAnswer, answersToMove, ID_RE };
+module.exports = { GameError, readRules, periodOf, dayKey, validate, applyAnswer, pickQuizQuestion, answersToMove, ID_RE };

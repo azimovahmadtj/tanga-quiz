@@ -215,6 +215,30 @@ describe("attacks found in the security audit", () => {
     b.set(doc(f, `scores/${uid}`), data); b.set(doc(f, `nicks/${data.nickLower}`), { uid }); return b.commit(); };
   test("cannot register with quiz points (fake prize winner)", () => deny(register("p2", fresh({ quizCoins: { z1: 9999 } }))));
   test("cannot register with today's coins", () => deny(register("p2", fresh({ dayCoins: 500 }))));
+  test("cannot register with a fake streak or history", () => deny(register("p2", fresh({ days: ["2026-01-01", "2026-01-02"] }))));
+  test("cannot keep the old nickname reserved when changing it (squatting)", async () => {
+    const f = ctx("p1"), b = writeBatch(f);
+    b.update(doc(f, "scores/p1"), { nick: "Second", nickLower: "second", updatedAt: NOW, srvAt: serverTimestamp() });
+    b.set(doc(f, "nicks/second"), { uid: "p1" });
+    await deny(b.commit());
+  });
+  test("can change the nickname when the old one is released", async () => {
+    const f = ctx("p1"), b = writeBatch(f);
+    b.update(doc(f, "scores/p1"), { nick: "Second", nickLower: "second", updatedAt: NOW, srvAt: serverTimestamp() });
+    b.set(doc(f, "nicks/second"), { uid: "p1" }); b.delete(doc(f, "nicks/player"));
+    await allow(b.commit());
+  });
+  test("cannot delete the profile but keep the nickname", () => deny(deleteDoc(doc(ctx("p1"), "scores/p1"))));
+  test("can delete the profile together with the nickname", async () => {
+    const f = ctx("p1"), b = writeBatch(f); b.delete(doc(f, "scores/p1")); b.delete(doc(f, "nicks/player"));
+    await allow(b.commit());
+  });
+  test("private quiz questions are hidden from players", async () => {
+    await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), "qprivate/hq"), { q: { tj: "?" } }));
+    await deny(getDoc(doc(ctx("p1"), "qprivate/hq"))); await deny(getDoc(doc(ctx("anon"), "qprivate/hq")));
+    await allow(getDoc(doc(ctx("boss"), "qprivate/hq")));
+    await deny(setDoc(doc(ctx("p1"), "qprivate/x"), { q: { tj: "?" } }));
+  });
   test("an entry must carry the player's real nickname", () =>
     deny(setDoc(doc(ctx("p1"), "entries/z1_p1"), { quizId: "z1", uid: "p1", nick: "Champ", createdAt: NOW, paid: false })));
 });
@@ -248,30 +272,72 @@ describe("submitAnswer (server)", () => {
     await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: false });
     await code(ask({ qid: "q5", choice: 1, quizId: "paid" }), "failed-precondition");
   });
+  // Paid quizzes: the server hands out each question (quizQuestion) and times it
+  const serve = (t = T0, uid = "u1", quizId = "paid") => game.quizQuestion(adminDb, uid, { quizId }, t);
+  const paidQuiz = (qids = ["q5", "q6"]) => put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids });
+  const paidEntry = (o = {}) => put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: true, ...o });
   test("quiz with an entry fee: paid players play and their quiz points are kept", async () => {
-    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5", "q6"] });
-    await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: true });
-    const r = await ask({ qid: "q5", choice: 1, quizId: "paid" });
+    await paidQuiz(); await paidEntry();
+    const q = await serve();
+    assert.equal(q.q.id, "q5"); assert.equal("correct" in q.q, false); assert.equal(q.total, 2);
+    const r = await ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 1000);
     assert.equal(r.gain, 4); assert.equal(r.me.quizCoins.paid, 4);
-    await ask({ qid: "q6", choice: 0, quizId: "paid" }, T0 + 2000);
+    assert.equal((await serve(T0 + 2000)).q.id, "q6");
+    await ask({ qid: "q6", choice: 0, quizId: "paid" }, T0 + 3000);
     assert.equal((await adminDb.doc("scores/u1").get()).data().quizCoins.paid, 4);
+    assert.equal((await serve(T0 + 4000)).done, true);
   });
   test("re-registering does not reopen a paid quiz (replay attack)", async () => {
-    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5", "q6"] });
-    await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: true });
-    await ask({ qid: "q5", choice: 1, quizId: "paid" });
+    await paidQuiz(); await paidEntry();
+    await serve(); await ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 1000);
     await put("scores/u1", { nick: "U", nickLower: "u", period: P0, coins: 0, answered: [], day: game.dayKey(T0), dayCount: 0, totalAnswered: 0, totalCorrect: 0 });
-    await code(ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 2000), "already-exists");
-    const r = await ask({ qid: "q6", choice: 1, quizId: "paid" }, T0 + 4000);
+    await code(ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 3000), "already-exists");
+    assert.equal((await serve(T0 + 4000)).q.id, "q6");
+    const r = await ask({ qid: "q6", choice: 1, quizId: "paid" }, T0 + 5000);
     assert.equal(r.me.quizCoins.paid, 8);                       // points from before re-registering are kept
   });
   test("a paid quiz does not reveal the correct option or store it publicly", async () => {
-    await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5"] });
-    await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: true });
-    const r = await ask({ qid: "q5", choice: 3, quizId: "paid" });
+    await paidQuiz(["q5"]); await paidEntry(); await serve();
+    const r = await ask({ qid: "q5", choice: 3, quizId: "paid" }, T0 + 1000);
     assert.equal(r.ok, false); assert.equal(r.correct, null);
     const s = (await adminDb.doc("scores/u1").get()).data();
     assert.equal(s.wrongAns?.q5, undefined); assert.equal((s.wrong || []).includes("q5"), false);
+  });
+  test("paid quiz: a question that was not handed out cannot be answered", async () => {
+    await paidQuiz(); await paidEntry(); await serve();
+    await code(ask({ qid: "q6", choice: 1, quizId: "paid" }, T0 + 1000), "failed-precondition");
+  });
+  test("paid quiz: an answer after the time limit counts as wrong (server timer)", async () => {
+    await paidQuiz(); await paidEntry(); await serve();
+    const r = await ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 60000);       // limit is 20 s + 5 s
+    assert.equal(r.ok, false); assert.equal(r.gain, 0);
+  });
+  test("paid quiz: reloading the page does not restart the timer", async () => {
+    await paidQuiz(); await paidEntry(); await serve();
+    const again = await serve(T0 + 15000);
+    assert.equal(again.q.id, "q5"); assert.equal(again.remain, 5000);
+  });
+  test("paid quiz: an abandoned question counts as answered when the time is up", async () => {
+    await paidQuiz(); await paidEntry(); await serve();
+    const next = await serve(T0 + 60000);
+    assert.equal(next.q.id, "q6");
+    await code(ask({ qid: "q5", choice: 1, quizId: "paid" }, T0 + 61000), "already-exists");
+  });
+  test("paid quiz: questions are handed out only to paid players", async () => {
+    await paidQuiz(); await code(serve(), "failed-precondition");
+    await paidEntry({ paid: false }); await code(serve(), "failed-precondition");
+  });
+  test("free quizzes have no handed-out questions", () => code(serve(T0, "u1", "z1"), "failed-precondition"));
+  test("handing out needs a valid quiz id", () => code(game.quizQuestion(adminDb, "u1", { quizId: "../x" }, T0), "invalid-argument"));
+  test("private quiz questions cannot be answered in the normal game", async () => {
+    await put("qprivate/hq", { topic: "tajik", q: { tj: "?" }, opts: { tj: ["a", "b", "c", "d"] } }); await put("answers/hq", { correct: 1 });
+    await code(ask({ qid: "hq", choice: 1 }), "failed-precondition");
+  });
+  test("private quiz questions are served and checked in their paid quiz", async () => {
+    await put("qprivate/hq", { topic: "tajik", q: { tj: "Hidden?" }, opts: { tj: ["a", "b", "c", "d"] } }); await put("answers/hq", { correct: 2 });
+    await paidQuiz(["hq"]); await paidEntry();
+    const q = await serve(); assert.equal(q.q.q.tj, "Hidden?");
+    assert.equal((await ask({ qid: "hq", choice: 2, quizId: "paid" }, T0 + 1000)).ok, true);
   });
   test("quiz-only questions cannot be answered outside the quiz", async () => {
     await put("questions/q5", { topic: "tajik", q: { tj: "?" }, opts: { tj: ["a", "b", "c", "d"] }, quizOnly: true });

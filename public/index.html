@@ -692,8 +692,10 @@ function winnersHTML(z){const w=winnersOf(z);if(!w.length)return "";
   return `<ol class="qzw">${w.map((x,i)=>`<li><span>${["🥇","🥈","🥉"][i]}</span><b>${esc(x.nick||"")}${x.id===S.uid?" ("+esc(t("you"))+")":""}</b><span>${x.quizCoins[z.id]} ${esc(t("coins"))} · ${esc(somoni(x.quizCoins[z.id]))}</span></li>`).join("")}</ol>`}
 function recentQuizzes(){const n=Date.now();return (S.quizzes||[]).filter(z=>z.end<n&&n-z.end<14*864e5).sort((a,b)=>b.end-a.end).slice(0,4)}
 function quizSection(){const qs=activeQuizzes(),old=recentQuizzes();if(!qs.length&&!old.length)return "";const done=S.me?.quizDone||{};
-  return `<section><div class="sechead"><h2>${esc(t("quizzesH"))}</h2></div><div class="qzs">${qs.map(z=>{const tot=z.qids.filter(id=>S.questions.some(q=>q.id===id)).length,d=(done[z.id]||[]).length,fin=tot&&d>=tot;
+  return `<section><div class="sechead"><h2>${esc(t("quizzesH"))}</h2></div><div class="qzs">${qs.map(z=>{let tot=z.qids.filter(id=>S.questions.some(q=>q.id===id)).length,d=(done[z.id]||[]).length,fin=tot&&d>=tot;
     const f=fee(z),e=(S.entries||{})[z.id],need=f>0&&!(e&&e.paid);
+    // Paid quiz questions are private, so progress comes from the player's entry
+    if(f>0){tot=z.qids.length;d=(e?.done||[]).length;fin=tot&&d>=tot}
     const btn=need?(e?`<button disabled>⏳ ${esc(t("qzWait"))}</button>`:`<button data-join="${z.id}">${esc(t("qzJoin"))} ${ARROW}</button>`)
       :`<button data-quiz="${z.id}" ${fin?"disabled":""}>${esc(fin?t("qzDone")+" ✓":d?t("qzCont"):t("qzStart"))} ${fin?"":ARROW}</button>`;
     return `<div class="qz"><h3>${esc(qLang(z.title))}</h3><div class="m">${tot} ${esc(t("qn"))} · +${z.bonus} ${esc(t("qzPer"))}</div>
@@ -742,6 +744,7 @@ function nextQ(){
   const m=S.me=normMe(S.me);
   let left;
   if(g.quiz){const z=activeQuizzes().find(x=>x.id===g.quiz);if(!z){S.game=null;S.view="home";paintChrome();return emptyState(t("qzClosed"),"")}
+    if(fee(z)>0)return nextPaidQ(z);
     const dn=(m.quizDone||{})[g.quiz]||[];left=z.qids.map(id=>S.questions.find(q=>q.id===id)).filter(q=>q&&!dn.includes(q.id));
     if(!left.length){S.game=null;S.view="home";paintChrome();return emptyState(t("qzOver"),t("qzOverT"))}
     g.cur=left[0];
@@ -751,7 +754,17 @@ function nextQ(){
   if(!left.length){S.game=null;S.view="home";paintChrome();return emptyState(t("allDone"),t("allDoneT"))}
   g.cur=left[Math.floor(Math.random()*left.length)];}g.done=false;g.picked=null;g.remain=CFG.seconds;
   g.order=[0,1,2,3].sort(()=>Math.random()-.5);
-  renderQuestion();
+  renderQuestion();startTick(g)}
+// Paid quizzes: the questions are private; the server hands out one at a time and keeps the time itself
+async function nextPaidQ(z){const g=S.game;g.cur=null;
+  $("view").innerHTML=`<div class="card" style="max-width:760px"><p class="note">⏳</p></div>`;
+  try{const r=await FB.call("quizQuestion",{quizId:z.id});if(S.game!==g)return;
+    if(r.done){S.game=null;S.view="home";paintChrome();return emptyState(t("qzOver"),t("qzOverT"))}
+    g.cur=r.q;g.done=false;g.picked=null;g.remain=Math.max(1,Math.round(r.remain/1000));
+    g.order=[0,1,2,3].sort(()=>Math.random()-.5);renderQuestion();startTick(g)}
+  catch(e){if(S.game!==g)return;S.game=null;S.view="home";paintChrome();
+    return /fee/.test(e?.message||"")?emptyState(t("qzWait"),t("qzWaitT")):emptyState(t("qzClosed"),authErr(e))}}
+function startTick(g){
   g.tick=setInterval(()=>{g.remain--;const bar=document.querySelector(".timer");
     if(bar){bar.querySelector("i").style.width=(g.remain/CFG.seconds*100)+"%";bar.classList.toggle("low",g.remain<=5);$("secs").textContent=g.remain}
     if(g.remain<=0)answer(-1)},1000);

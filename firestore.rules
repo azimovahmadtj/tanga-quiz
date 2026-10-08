@@ -63,12 +63,23 @@ service cloud.firestore {
       return num(n, 'coins') == 0 && num(n, 'totalAnswered') == 0 && num(n, 'totalCorrect') == 0
         && num(n, 'dayCount') == 0 && num(n, 'dayCoins') == 0
         && n.get('quizCoins', {}).size() == 0          // quiz points (prizes) come only from the server
+        && n.get('quizDone', {}).size() == 0 && n.get('hist', {}).size() == 0 && n.get('wrongAns', {}).size() == 0
+        && n.get('answered', []).size() == 0 && n.get('days', []).size() == 0
+        && n.get('activity', []).size() == 0 && n.get('wrong', []).size() == 0
         && n.srvAt == request.time;
     }
     // A nickname in scores must be reserved for this player in /nicks
     function ownsNick(uid, d) {
       return !('nick' in d)
         || getAfter(/databases/$(database)/documents/nicks/$(d.nickLower)).data.uid == uid;
+    }
+
+    // Changing or dropping a nickname must release the old reservation in the same write,
+    // so one player cannot collect many reserved nicknames (squatting)
+    function nickReleased(o, n) {
+      return !('nickLower' in o) || n.get('nickLower', '') == o.nickLower
+        || getAfter(/databases/$(database)/documents/nicks/$(o.nickLower)) == null
+        || getAfter(/databases/$(database)/documents/nicks/$(o.nickLower)).data.uid != request.auth.uid;
     }
 
     // Private contact details written by the player's own browser
@@ -96,6 +107,8 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /answers/{id}   { allow read, write: if isAdmin(); }
+    // Questions of paid quizzes stay private until the server hands them out one at a time during the quiz
+    match /qprivate/{id}  { allow read, write: if isAdmin(); }
     match /quizzes/{id}   { allow read: if true; allow write: if isAdmin(); }
     match /config/{id}    { allow read: if true; allow write: if isAdmin(); }
 
@@ -111,8 +124,9 @@ service cloud.firestore {
                                           .hasOnly(['nick', 'nickLower', 'avatar', 'region', 'wrong', 'wrongAns', 'updatedAt', 'srvAt'])
                                      && request.resource.data.get('wrong', []).size() <= resource.data.get('wrong', []).size()
                                      && rateOk(request.resource.data, resource.data)
-                                     && ownsNick(uid, request.resource.data));
-      allow delete: if isSelf(uid) || isAdmin();
+                                     && ownsNick(uid, request.resource.data)
+                                     && nickReleased(resource.data, request.resource.data));
+      allow delete: if isAdmin() || (isSelf(uid) && nickReleased(resource.data, {}));
     }
 
     // Nickname reservations: one owner per (lower-case) nickname, so nobody can take someone else's name

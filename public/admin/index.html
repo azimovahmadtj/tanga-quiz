@@ -1302,9 +1302,15 @@ function aSettings(){
 // The 9 cartoon questions are added automatically the first time the admin opens the panel without them
 // Earlier questions saved with the "*" marker inside the option text are cleaned once
 const starDone=new Set();
+// The stored part of a question (without the admin's view-only fields)
+function qData(q){const {id,pubAns,correct,hidden,quizOnly,...d}=q;return d}
+function moveQ(q,toPrivate){return FB.moveQuestion(q.id,qData(q),toPrivate)}
+// Questions marked "quiz only" by the previous version are still public: move them to private storage
+const hideDone=new Set();
+function hideQuizOnly(){for(const q of A.pubQ||[])if(q.quizOnly===true&&!hideDone.has(q.id)){hideDone.add(q.id);moveQ(q,true).catch(()=>{})}}
 function cleanStars(){for(const q of S.questions){if(starDone.has(q.id)||!q.opts)continue;starDone.add(q.id);
   const opts={};let dirty=false;for(const l in q.opts){if(!Array.isArray(q.opts[l]))continue;opts[l]=q.opts[l].map(o=>{const c=cleanOpt(o);if(c!==o)dirty=true;return c})}
-  if(dirty)S.db.doc("questions/"+q.id).update({opts}).catch(()=>{})}}
+  if(dirty)S.db.doc((q.hidden?"qprivate/":"questions/")+q.id).update({opts}).catch(()=>{})}}
 let cartTried=false;
 function autoCartoons(){if(cartTried||qCount("cartoon"))return;cartTried=true;importCart()}
 // Errors stay on the Settings card (with the server's code) so they can be read and reported
@@ -1366,7 +1372,8 @@ function bindQuizForm(){const f=$("qzForm");if(!f)return;
     const qids=[...A.qzSel].filter(id=>S.questions.some(q=>q.id===id));if(!qids.length)return toast(at("qzNeedQ"));
     const entryFee=Math.max(0,Math.min(10000,+String(d.get("fee")).replace(",",".")||0)),payInfo=String(d.get("payInfo")||"").trim().slice(0,400);
     try{await S.db.collection("quizzes").add({title,start,end,bonus:Math.max(1,Math.min(1000,+d.get("bonus")||CFG.coinsPerRight)),entryFee,payInfo,prizePlaces:3,qids,createdAt:Date.now()});
-      if(d.get("only"))for(const id of qids)await S.db.doc("questions/"+id).update({quizOnly:true});
+      // Private questions are handed out by the server only during the paid quiz, so nobody sees them in advance
+      if(d.get("only")&&entryFee>0)for(const id of qids){const q=S.questions.find(x=>x.id===id);if(q&&!q.hidden)await moveQ(q,true)}
       toast(at("qzCreated"));A.qzSel=new Set();f.reset();paintQzPick()}catch(err){toast(t("err")+" "+(err?.message||err?.code))}}}
 
 /* ---- topics ---- */
@@ -1439,7 +1446,8 @@ function paintAQList(){const ul=$("qlist");if(!ul||!$("qF"))return;const s=A.qSe
   const list=S.questions.filter(q=>(!A.qFilter||q.topic===A.qFilter)&&(!s||LANGS.some(l=>String(q.q?.[l]||"").toLowerCase().includes(s)))).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   $("qcount").textContent=`${t("list")} (${list.length})`;
   ul.innerHTML=list.map(q=>`<li><span>${typeof q.img==="string"&&/^\/img\//.test(q.img)?`<img src="${esc(q.img)}" alt="" style="width:64px;height:40px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px">`:""}<span class="tag">${esc(topicName(q.topic))}</span>${q.quizOnly?`<span class="tag" style="background:#FDEBC8;color:#7A4A00">🏆 ${esc(at("qOnlyTag"))}</span>`:""}${esc(qLang(q.q))}<br><span class="note">✓ ${esc((q.opts?.[lang]||q.opts?.tj||q.opts?.ru||q.opts?.en||[])[q.correct]||"")}</span></span>${q.quizOnly?`<button class="btn ghost" data-free="${esc(q.id)}">${esc(at("qFree"))}</button>`:""}<button class="btn danger" data-del="${esc(q.id)}">${esc(t("del"))}</button></li>`).join("");
-  ul.querySelectorAll("[data-free]").forEach(b=>b.onclick=()=>S.db.doc("questions/"+b.dataset.free).update({quizOnly:false}).then(()=>toast(t("saved"))).catch(err=>toast(t("err")+" "+(err?.message||err?.code))));
+  ul.querySelectorAll("[data-free]").forEach(b=>b.onclick=()=>{const q=S.questions.find(x=>x.id===b.dataset.free);if(!q)return;b.disabled=true;
+    moveQ({...q,quizOnly:undefined},false).then(()=>toast(t("saved"))).catch(err=>{b.disabled=false;toast(t("err")+" "+(err?.message||err?.code))})});
   ul.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{try{await FB.deleteQuestion(b.dataset.del);toast(t("deleted"))}catch(err){toast(t("err")+" "+(err?.message||err?.code))}})}
 
 /* ---- users ---- */
@@ -1589,7 +1597,10 @@ function showALogin(msg){document.body.classList.add("adminmode");$("adm").hidde
     S.uid=u.uid;S.admin=true;S.me={nick:(u.email||"admin").split("@")[0]};
     $("alog").hidden=true;
     if(!started){started=true;
-      db.collection("questions").onSnapshot(s=>{S.questions=s.docs.map(d=>{const x={id:d.id,...d.data()};if(x.topic==="history")x.topic="tajik";if("correct" in x)x.pubAns=true;return x});mergeAns();admSoft();autoCartoons();cleanStars()},()=>{});
+      // Public questions plus the private ones of paid quizzes (/qprivate), shown together to the admin
+      const qMerge=()=>{S.questions=[...(A.pubQ||[]),...(A.privQ||[])];mergeAns();admSoft();autoCartoons();cleanStars();hideQuizOnly()};
+      db.collection("questions").onSnapshot(s=>{A.pubQ=s.docs.map(d=>{const x={id:d.id,...d.data()};if(x.topic==="history")x.topic="tajik";if("correct" in x)x.pubAns=true;return x});qMerge()},()=>{});
+      db.collection("qprivate").onSnapshot(s=>{A.privQ=s.docs.map(d=>({id:d.id,...d.data(),hidden:true,quizOnly:true}));qMerge()},()=>{});
       db.collection("answers").onSnapshot(s=>{A.ans={};s.docs.forEach(d=>A.ans[d.id]=d.data().correct);mergeAns();admSoft()},()=>{});
       db.collection("quizzes").onSnapshot(s=>{S.quizzes=s.docs.map(d=>({id:d.id,...d.data()}));admSoft()},()=>{});
       db.doc("config/topics").onSnapshot(s=>{applyCustom(s.exists?s.data().list:[]);admSoft()},()=>{});

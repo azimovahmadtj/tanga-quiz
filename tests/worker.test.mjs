@@ -107,12 +107,19 @@ describe("worker: answers", () => {
     assert.equal((await call("submitAnswer", { qid: "q4", choice: 1 }, { now: T0 + 9000, tok: await token({ now: T0 + 9000 }) })).status, 429);
   });
   test("quiz bonus", async () => assert.equal((await call("submitAnswer", { qid: "q5", choice: 1, quizId: "z1" })).body.result.me.coins, 20));
-  test("quiz with an entry fee needs a confirmed payment", async () => {
+  test("quiz with an entry fee needs a confirmed payment and a handed-out question", async () => {
     await put("quizzes/paid", { bonus: 4, entryFee: 5, start: T0 - 864e5, end: T0 + 864e5, qids: ["q5"] });
-    assert.equal((await call("submitAnswer", { qid: "q5", choice: 1, quizId: "paid" })).status, 412);
+    assert.equal((await call("quizQuestion", { quizId: "paid" })).status, 412);
     await put("entries/paid_u1", { quizId: "paid", uid: "u1", nick: "U", createdAt: T0, paid: true });
+    assert.equal((await call("submitAnswer", { qid: "q5", choice: 1, quizId: "paid" })).status, 412);   // not handed out yet
+    const q = await call("quizQuestion", { quizId: "paid" });
+    assert.equal(q.status, 200); assert.equal(q.body.result.q.id, "q5"); assert.equal("correct" in q.body.result.q, false);
     const r = await call("submitAnswer", { qid: "q5", choice: 1, quizId: "paid" }, { now: T0 + 2000, tok: await token({ now: T0 + 2000 }) });
-    assert.equal(r.status, 200); assert.equal(r.body.result.me.quizCoins.paid, 4);
+    assert.equal(r.status, 200); assert.equal(r.body.result.me.quizCoins.paid, 4); assert.equal(r.body.result.correct, null);
+  });
+  test("private quiz questions stay hidden in the normal game", async () => {
+    await put("qprivate/hq", { topic: "tajik", q: { tj: "?" }, opts: { tj: ["a", "b", "c", "d"] } }); await put("answers/hq", { correct: 1 });
+    assert.equal((await call("submitAnswer", { qid: "hq", choice: 1 })).status, 412);
   });
   test("a player can only change their own score", async () => {
     await put("scores/u2", { nick: "V", nickLower: "v", period: 0, coins: 5 });
